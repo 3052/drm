@@ -87,7 +87,7 @@ var key_tests = []struct {
       // below is FHD (1920x1080), UHD needs SL3000
       kid_uuid: "010521b274da1acbbd3c6f124a238c67",
       req: func(req *http.Request, cache string) error {
-         data, err := os.ReadFile(cache + "/max/PlayReady")
+         data, err := os.ReadFile(cache + "/hboMax/PlayReady")
          if err != nil {
             return err
          }
