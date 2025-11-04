@@ -38,7 +38,7 @@ func (c *Cdm) New(private_key, client_id, psshVar []byte) error {
 
 func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
    session_key, err := rsa.DecryptOAEP(
-      sha1.New(), nil, c.private_key, body.session_key(), nil,
+      sha1.New(), nil, c.private_key, body.sessionKey(), nil,
    )
    if err != nil {
       return nil, err
@@ -132,7 +132,7 @@ func (r ResponseBody) Container() iter.Seq[KeyContainer] {
    }
 }
 
-func (r ResponseBody) session_key() []byte {
+func (r ResponseBody) sessionKey() []byte {
    for field := range r[0].Get(4) {
       return field.Bytes
    }
