@@ -7,24 +7,30 @@ type app struct {
    drm   string
 }
 
+// play.google.com/store/apps/category/ENTERTAINMENT
 var Details = map[string][]app{
    "100M+ Downloads": {
       {
          url:   "play.google.com/store/apps/details?id=com.tubitv",
-         title: "Tubi: Free Movies & Live TV",
-         rank:  "#4 top free entertainment",
          drm:   "clearKey",
+         rank:  "#3 top free entertainment",
+         title: "Tubi: Free Movies & Live TV",
       },
       {
          url:   "play.google.com/store/apps/details?id=tv.pluto.android",
-         title: "PlutoTV: Live TV & Free Movies",
-         rank:  "#9 top free entertainment",
          drm:   "there is an error with this content",
+         rank:  "#8 top free entertainment",
+         title: "PlutoTV: Live TV & Free Movies",
       },
       {
          url:   "play.google.com/store/apps/details?id=com.wbd.stream",
-         title: "Max: Stream HBO, TV, & Movies",
          rank:  "#1 top grossing entertainment",
+         title: "Max: Stream HBO, TV, & Movies",
+      },
+      {
+         url:   "play.google.com/store/apps/details?id=com.hulu.plus",
+         drm:   "sign up now",
+         title: "Hulu: Stream TV shows & movies",
       },
    },
    "50M+ Downloads": {
@@ -32,11 +38,6 @@ var Details = map[string][]app{
          drm:   "there was an error loading the video",
          title: "Plex: Stream Movies & TV",
          url:   "play.google.com/store/apps/details?id=com.plexapp.android",
-      },
-      {
-         drm:   "sign up now",
-         title: "Hulu: Stream TV shows & movies",
-         url:   "play.google.com/store/apps/details?id=com.hulu.plus",
       },
    },
    "10M+ Downloads": {
