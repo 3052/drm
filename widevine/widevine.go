@@ -13,47 +13,24 @@ import (
    "iter"
 )
 
-func (c *Cdm) New(private_key, client_id, psshVar []byte) error {
-   block, _ := pem.Decode(private_key)
-   var err error
-   c.private_key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-   if err != nil {
-      // L1
-      key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-      if err != nil {
-         return err
-      }
-      c.private_key = key.(*rsa.PrivateKey)
+func (k KeyContainer) Key(block cipher.Block) []byte {
+   for f := range k[0].Get(3) { // bytes key
+      cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(f.Bytes, f.Bytes)
+      return unpad(f.Bytes)
    }
-   c.license_request = protobuf.Message{ // LicenseRequest
-      protobuf.Bytes(1, client_id), // ClientIdentification client_id
-      protobuf.LenPrefix(2, // ContentIdentification content_id
-         protobuf.LenPrefix(1, // WidevinePsshData widevine_pssh_data
-            protobuf.Bytes(1, psshVar),
-         ),
-      ),
-   }.Marshal()
    return nil
 }
 
-func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
-   session_key, err := rsa.DecryptOAEP(
-      sha1.New(), nil, c.private_key, body.sessionKey(), nil,
-   )
-   if err != nil {
-      return nil, err
+func (r ResponseBody) Container() iter.Seq[KeyContainer] {
+   return func(yield func(KeyContainer) bool) {
+      for field := range r[0].Get(2) { // License msg
+         for field := range field.Message.Get(3) { // KeyContainer key
+            if !yield(KeyContainer{field.Message}) {
+               return
+            }
+         }
+      }
    }
-   var data []byte
-   data = append(data, 1)
-   data = append(data, "ENCRYPTION"...)
-   data = append(data, 0)
-   data = append(data, c.license_request...)
-   data = append(data, 0, 0, 0, 128) // size
-   block, err := aes.NewCipher(session_key)
-   if err != nil {
-      return nil, err
-   }
-   return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
 }
 
 func (c *Cdm) RequestBody() ([]byte, error) {
@@ -81,6 +58,49 @@ func (c *Cdm) RequestBody() ([]byte, error) {
    return signed.Marshal(), nil
 }
 
+func (c *Cdm) New(private_key, client_id, psshData []byte) error {
+   block, _ := pem.Decode(private_key)
+   var err error
+   c.private_key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+   if err != nil {
+      // L1
+      key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+      if err != nil {
+         return err
+      }
+      c.private_key = key.(*rsa.PrivateKey)
+   }
+   c.license_request = protobuf.Message{ // LicenseRequest
+      protobuf.Bytes(1, client_id), // ClientIdentification client_id
+      protobuf.LenPrefix(2, // ContentIdentification content_id
+         protobuf.LenPrefix(1, // WidevinePsshData widevine_pssh_data
+            protobuf.Bytes(1, psshData), // bytes pssh_data
+         ),
+      ),
+   }.Marshal()
+   return nil
+}
+
+func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
+   session_key, err := rsa.DecryptOAEP(
+      sha1.New(), nil, c.private_key, body.sessionKey(), nil,
+   )
+   if err != nil {
+      return nil, err
+   }
+   var data []byte
+   data = append(data, 1)
+   data = append(data, "ENCRYPTION"...)
+   data = append(data, 0)
+   data = append(data, c.license_request...)
+   data = append(data, 0, 0, 0, 128) // size
+   block, err := aes.NewCipher(session_key)
+   if err != nil {
+      return nil, err
+   }
+   return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
+}
+
 func (k KeyContainer) Id() []byte {
    for field := range k[0].Get(1) {
       return field.Bytes
@@ -91,14 +111,6 @@ func (k KeyContainer) Id() []byte {
 func (k KeyContainer) iv() []byte {
    for field := range k[0].Get(2) {
       return field.Bytes
-   }
-   return nil
-}
-
-func (k KeyContainer) Key(block cipher.Block) []byte {
-   for f := range k[0].Get(3) {
-      cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(f.Bytes, f.Bytes)
-      return unpad(f.Bytes)
    }
    return nil
 }
@@ -119,18 +131,6 @@ type Cdm struct {
 }
 
 type KeyContainer [1]protobuf.Message
-
-func (r ResponseBody) Container() iter.Seq[KeyContainer] {
-   return func(yield func(KeyContainer) bool) {
-      for field := range r[0].Get(2) {
-         for field := range field.Message.Get(3) {
-            if !yield(KeyContainer{field.Message}) {
-               return
-            }
-         }
-      }
-   }
-}
 
 func (r ResponseBody) sessionKey() []byte {
    for field := range r[0].Get(4) {
