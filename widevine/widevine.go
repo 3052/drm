@@ -15,6 +15,31 @@ import (
    "iter"
 )
 
+func (c *Cdm) RequestBody() ([]byte, error) {
+   hash := sha1.Sum(c.license_request)
+   signature, err := rsa.SignPSS(
+      fill{},
+      c.private_key,
+      crypto.SHA1,
+      hash[:],
+      &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash},
+   )
+   if err != nil {
+      return nil, err
+   }
+   // SignedMessage
+   signed := protobuf.Message{
+      // kktv.me
+      // type: LICENSE_REQUEST
+      protobuf.NewVarint(1, 1),
+      // LicenseRequest msg
+      protobuf.NewBytes(2, c.license_request),
+      // bytes signature
+      protobuf.NewBytes(3, signature),
+   }
+   return signed.Encode()
+}
+
 func (c *Cdm) New(private_key, client_id, psshData []byte) error {
    block, _ := pem.Decode(private_key)
    var err error
@@ -39,31 +64,6 @@ func (c *Cdm) New(private_key, client_id, psshData []byte) error {
       return err
    }
    return nil
-}
-
-func (c *Cdm) RequestBody() ([]byte, error) {
-   hash := sha1.Sum(c.license_request)
-   signature, err := rsa.SignPSS(
-      fill{},
-      c.private_key,
-      crypto.SHA1,
-      hash[:],
-      &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash},
-   )
-   if err != nil {
-      return nil, err
-   }
-   // SignedMessage
-   signed := protobuf.Message{
-      // kktv.me
-      // type: LICENSE_REQUEST
-      protobuf.NewVarint(1, 1),
-      // LicenseRequest msg
-      protobuf.NewBytes(2, c.license_request),
-      // bytes signature
-      protobuf.NewBytes(3, signature),
-   }
-   return signed.Encode()
 }
 
 func (k KeyContainer) Id() []byte {

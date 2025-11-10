@@ -6,8 +6,8 @@ import (
 
 // SignedLicenseRequest is the message sent to the Widevine license server.
 type SignedLicenseRequest struct {
-   // The type of the message.
-   Type protobuf.WireType
+   // The type of the message (e.g., license request).
+   Type MessageType
    // The serialized LicenseRequest message.
    Msg []byte
    // The signature of the Msg field.
@@ -21,6 +21,7 @@ type SignedLicenseRequest struct {
 // ToProto creates a protobuf.Message from the SignedLicenseRequest struct.
 func (slr *SignedLicenseRequest) ToProto() protobuf.Message {
    msg := protobuf.Message{}
+   // The Type field is an enum, which is encoded as a Varint.
    msg = append(msg, protobuf.NewVarint(1, uint64(slr.Type)))
    if slr.Msg != nil {
       msg = append(msg, protobuf.NewBytes(2, slr.Msg))

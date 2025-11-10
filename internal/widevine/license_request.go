@@ -10,8 +10,8 @@ type LicenseRequest struct {
    ClientID []byte
    // Information about the content.
    ContentID *ContentIdentification
-   // The type of the request.
-   Type protobuf.WireType
+   // The type of the request (e.g., new or renewal).
+   Type RequestType
    // A key control nonce.
    KeyControlNonce uint32
 }
@@ -20,12 +20,12 @@ type LicenseRequest struct {
 func (lr *LicenseRequest) ToProto() protobuf.Message {
    msg := protobuf.Message{}
    if lr.ClientID != nil {
-      // ClientID is already a serialized protobuf message. We wrap it as a bytes field.
       msg = append(msg, protobuf.NewBytes(1, lr.ClientID))
    }
    if lr.ContentID != nil {
       msg = append(msg, protobuf.NewMessage(2, lr.ContentID.ToProto()...))
    }
+   // The Type field is an enum, which is encoded as a Varint.
    msg = append(msg, protobuf.NewVarint(3, uint64(lr.Type)))
    if lr.KeyControlNonce != 0 {
       msg = append(msg, protobuf.NewFixed32(7, lr.KeyControlNonce))
