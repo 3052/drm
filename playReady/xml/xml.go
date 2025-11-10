@@ -6,6 +6,11 @@ import (
    "errors"
 )
 
+type WrmHeaderData struct {
+   ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
+   Kid         Bytes       `xml:"KID"` // FIXME this can be a slice
+}
+
 type Data struct {
    CertificateChains CertificateChains
    Features          Features
@@ -45,11 +50,6 @@ type La struct {
    Version       string
    ContentHeader ContentHeader
    EncryptedData EncryptedData
-}
-
-type WrmHeaderData struct { // Renamed from DATA
-   ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
-   Kid         Bytes       `xml:"KID"`
 }
 
 func (b Bytes) MarshalText() ([]byte, error) {

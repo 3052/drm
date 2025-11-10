@@ -155,6 +155,7 @@ func (l *License) decode(data []byte) error {
    }
    return nil
 }
+
 // Constants for object types within the certificate structure.
 const (
    objTypeBasic            = 0x0001
