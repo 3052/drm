@@ -9,22 +9,56 @@ import (
    "crypto/sha1"
    "crypto/x509"
    "encoding/pem"
+   "errors"
    "github.com/emmansun/gmsm/cbcmac"
+   "github.com/emmansun/gmsm/padding"
    "iter"
 )
 
-func (k KeyContainer) Key(block cipher.Block) []byte {
-   for f := range k[0].Get(3) { // bytes key
-      cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(f.Bytes, f.Bytes)
-      return unpad(f.Bytes)
+func (k KeyContainer) Id() []byte {
+   field, ok := k[0].Field(1)
+   if !ok {
+      return nil
    }
-   return nil
+   return field.Bytes
 }
 
+func (r *ResponseBody) Unmarshal(data []byte) error {
+   return r[0].Parse(data)
+}
+
+func (p *Pssh) Encode() ([]byte, error) {
+   var data protobuf.Message
+   for _, key_id := range p.KeyIds {
+      data = append(data, protobuf.NewBytes(2, key_id))
+   }
+   if len(p.ContentId) >= 1 {
+      data = append(data, protobuf.NewBytes(4, p.ContentId))
+   }
+   return data.Encode()
+}
+
+type Pssh struct {
+   ContentId []byte
+   KeyIds    [][]byte
+}
+
+// SignedMessage
+// LICENSE = 2;
+type ResponseBody [1]protobuf.Message
+
+func (fill) Read(data []byte) (int, error) {
+   return len(data), nil
+}
+
+type fill struct{}
 func (r ResponseBody) Container() iter.Seq[KeyContainer] {
    return func(yield func(KeyContainer) bool) {
-      for field := range r[0].Get(2) { // License msg
-         for field := range field.Message.Get(3) { // KeyContainer key
+      license, ok := r[0].Field(2) // License msg
+      if ok {
+         container := license.Message.Iterator(3) // KeyContainer key
+         for container.Next() {
+            field := container.Field()
             if !yield(KeyContainer{field.Message}) {
                return
             }
@@ -49,13 +83,13 @@ func (c *Cdm) RequestBody() ([]byte, error) {
    signed := protobuf.Message{
       // kktv.me
       // type: LICENSE_REQUEST
-      protobuf.Varint(1, 1),
+      protobuf.NewVarint(1, 1),
       // LicenseRequest msg
-      protobuf.Bytes(2, c.license_request),
+      protobuf.NewBytes(2, c.license_request),
       // bytes signature
-      protobuf.Bytes(3, signature),
+      protobuf.NewBytes(3, signature),
    }
-   return signed.Marshal(), nil
+   return signed.Encode()
 }
 
 func (c *Cdm) New(private_key, client_id, psshData []byte) error {
@@ -70,15 +104,27 @@ func (c *Cdm) New(private_key, client_id, psshData []byte) error {
       }
       c.private_key = key.(*rsa.PrivateKey)
    }
-   c.license_request = protobuf.Message{ // LicenseRequest
-      protobuf.Bytes(1, client_id), // ClientIdentification client_id
-      protobuf.LenPrefix(2, // ContentIdentification content_id
-         protobuf.LenPrefix(1, // WidevinePsshData widevine_pssh_data
-            protobuf.Bytes(1, psshData), // bytes pssh_data
+   c.license_request, err = protobuf.Message{ // LicenseRequest
+      protobuf.NewBytes(1, client_id), // ClientIdentification client_id
+      protobuf.NewMessage(2, // ContentIdentification content_id
+         protobuf.NewMessage(1, // WidevinePsshData widevine_pssh_data
+            protobuf.NewBytes(1, psshData), // bytes pssh_data
          ),
       ),
-   }.Marshal()
+   }.Encode()
+   if err != nil {
+      return err
+   }
    return nil
+}
+
+func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
+   field, ok := k[0].Field(3) // bytes key
+   if !ok {
+      return nil, errors.New(".Field(3)")
+   }
+   cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(field.Bytes, field.Bytes)
+   return padding.NewPKCS7Padding(aes.BlockSize).Unpad(field.Bytes)
 }
 
 func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
@@ -101,28 +147,9 @@ func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
    return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
 }
 
-func (k KeyContainer) Id() []byte {
-   for field := range k[0].Get(1) {
-      return field.Bytes
-   }
-   return nil
-}
-
 func (k KeyContainer) iv() []byte {
-   for field := range k[0].Get(2) {
-      return field.Bytes
-   }
-   return nil
-}
-
-func unpad(data []byte) []byte {
-   if len(data) >= 1 {
-      pad := data[len(data)-1]
-      if len(data) >= int(pad) {
-         data = data[:len(data)-int(pad)]
-      }
-   }
-   return data
+   field, _ := k[0].Field(2)
+   return field.Bytes
 }
 
 type Cdm struct {
@@ -133,38 +160,6 @@ type Cdm struct {
 type KeyContainer [1]protobuf.Message
 
 func (r ResponseBody) sessionKey() []byte {
-   for field := range r[0].Get(4) {
-      return field.Bytes
-   }
-   return nil
+   field, _ := r[0].Field(4)
+   return field.Bytes
 }
-
-func (p *Pssh) Marshal() []byte {
-   var data protobuf.Message
-   for _, key_id := range p.KeyIds {
-      data = append(data, protobuf.Bytes(2, key_id))
-   }
-   if len(p.ContentId) >= 1 {
-      data = append(data, protobuf.Bytes(4, p.ContentId))
-   }
-   return data.Marshal()
-}
-
-type Pssh struct {
-   ContentId []byte
-   KeyIds    [][]byte
-}
-
-func (r *ResponseBody) Unmarshal(data []byte) error {
-   return r[0].Unmarshal(data)
-}
-
-// SignedMessage
-// LICENSE = 2;
-type ResponseBody [1]protobuf.Message
-
-func (fill) Read(data []byte) (int, error) {
-   return len(data), nil
-}
-
-type fill struct{}

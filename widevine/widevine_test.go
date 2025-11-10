@@ -9,20 +9,6 @@ import (
    "testing"
 )
 
-var ctv_ca = struct {
-   content_id  string
-   key         string
-   key_id      string
-   url_ctv     string
-   url_license string
-}{
-   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
-   key:         "xQ87t+z5cLOVgxDdSgHyoA==",
-   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
-   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
-   url_license: "https://license.9c9media.ca/widevine",
-}
-
 func TestCtv(t *testing.T) {
    key, err := base64.StdEncoding.DecodeString(ctv_ca.key)
    if err != nil {
@@ -44,14 +30,18 @@ func TestCtv(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var psshVar Pssh
-   psshVar.KeyIds = [][]byte{key_id}
-   psshVar.ContentId, err = base64.StdEncoding.DecodeString(ctv_ca.content_id)
+   var psshValue Pssh
+   psshValue.KeyIds = [][]byte{key_id}
+   psshValue.ContentId, err = base64.StdEncoding.DecodeString(ctv_ca.content_id)
+   if err != nil {
+      t.Fatal(err)
+   }
+   psshData, err := psshValue.Encode()
    if err != nil {
       t.Fatal(err)
    }
    var module Cdm
-   err = module.New(private_key, client_id, psshVar.Marshal())
+   err = module.New(private_key, client_id, psshData)
    if err != nil {
       t.Fatal(err)
    }
@@ -82,10 +72,28 @@ func TestCtv(t *testing.T) {
    }
    for container := range body.Container() {
       if bytes.Equal(container.Id(), key_id) {
-         if bytes.Equal(container.Key(block), key) {
+         key1, err := container.Key(block)
+         if err != nil {
+            t.Fatal(err)
+         }
+         if bytes.Equal(key1, key) {
             return
          }
       }
    }
    t.Fatal("key not found")
+}
+
+var ctv_ca = struct {
+   content_id  string
+   key         string
+   key_id      string
+   url_ctv     string
+   url_license string
+}{
+   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
+   key:         "xQ87t+z5cLOVgxDdSgHyoA==",
+   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
+   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
+   url_license: "https://license.9c9media.ca/widevine",
 }
