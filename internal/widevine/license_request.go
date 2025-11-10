@@ -6,8 +6,8 @@ import (
 
 // LicenseRequest is the core message for requesting a license.
 type LicenseRequest struct {
-   // Information about the client.
-   ClientID *ClientIdentification
+   // Pre-encoded ClientIdentification message.
+   ClientID []byte
    // Information about the content.
    ContentID *ContentIdentification
    // The type of the request.
@@ -20,7 +20,8 @@ type LicenseRequest struct {
 func (lr *LicenseRequest) ToProto() protobuf.Message {
    msg := protobuf.Message{}
    if lr.ClientID != nil {
-      msg = append(msg, protobuf.NewMessage(1, lr.ClientID.ToProto()...))
+      // ClientID is already a serialized protobuf message. We wrap it as a bytes field.
+      msg = append(msg, protobuf.NewBytes(1, lr.ClientID))
    }
    if lr.ContentID != nil {
       msg = append(msg, protobuf.NewMessage(2, lr.ContentID.ToProto()...))
