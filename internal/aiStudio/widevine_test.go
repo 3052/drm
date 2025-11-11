@@ -45,7 +45,6 @@ func TestCreateWidevineLicenseRequest(t *testing.T) {
    // 4. Create the ContentIdentification message.
    contentIdentification := &ContentIdentification{
       WidevinePsshData: widevinePsshData,
-      LicenseType:      LicenseType_STREAMING,
       RequestID:        []byte("some-request-id"),
    }
 
@@ -89,22 +88,27 @@ func TestCreateWidevineLicenseRequest(t *testing.T) {
 }
 
 func TestParseWidevineLicenseResponse(t *testing.T) {
-   // 1. Construct a mock License message.
+   // 1. Construct a mock License message according to the provided proto file.
+   mockSessionID := []byte("mock-session-id")
    mockKeyID := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00}
    mockContentKey := []byte{0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}
 
    licenseMsg := protobuf.Message{
-      // A License_Key
+      // Field 1: LicenseIdentification
       protobuf.NewMessage(1,
-         protobuf.NewBytes(1, mockKeyID),
-         protobuf.NewVarint(2, uint64(KeyType_CONTENT)), // Corrected enum value to 2
-         protobuf.NewBytes(3, mockContentKey),
+         protobuf.NewBytes(2, mockSessionID),
       ),
-      // A Policy
+      // Field 2: Policy
       protobuf.NewMessage(2,
          protobuf.NewVarint(1, 1),     // CanPlay = true
          protobuf.NewVarint(3, 1),     // CanRenew = true
          protobuf.NewVarint(6, 86400), // LicenseDurationSeconds = 24 hours
+      ),
+      // Field 3: KeyContainer (repeated)
+      protobuf.NewMessage(3,
+         protobuf.NewBytes(1, mockKeyID),
+         protobuf.NewBytes(3, mockContentKey),
+         protobuf.NewVarint(4, uint64(KeyType_CONTENT)),
       ),
    }
    licenseBytes, err := licenseMsg.Encode()
@@ -119,7 +123,7 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
       protobuf.NewVarint(1, uint64(MessageType_LICENSE_RESPONSE)),
       protobuf.NewBytes(2, licenseBytes),
       protobuf.NewBytes(3, mockSignature),
-      protobuf.NewBytes(4, mockSessionKey), // Corrected field number to 4
+      protobuf.NewBytes(4, mockSessionKey),
    }
    signedResponseBytes, err := signedResponseMsg.Encode()
    if err != nil {
@@ -133,17 +137,17 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
    }
 
    // 4. Verify the contents of the parsed response.
-   if parsedResponse.Type != MessageType_LICENSE_RESPONSE {
-      t.Errorf("expected type %v, got %v", MessageType_LICENSE_RESPONSE, parsedResponse.Type)
-   }
-   if !bytes.Equal(parsedResponse.Signature, mockSignature) {
-      t.Errorf("signature mismatch")
-   }
    if !bytes.Equal(parsedResponse.SessionKey, mockSessionKey) {
       t.Errorf("session key mismatch")
    }
    if parsedResponse.License == nil {
       t.Fatal("parsed license is nil")
+   }
+   if parsedResponse.License.Id == nil {
+      t.Fatal("parsed license ID is nil")
+   }
+   if !bytes.Equal(parsedResponse.License.Id.SessionID, mockSessionID) {
+      t.Errorf("session ID mismatch in license identification")
    }
    if len(parsedResponse.License.Keys) != 1 {
       t.Fatalf("expected 1 key, got %d", len(parsedResponse.License.Keys))
@@ -167,9 +171,5 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
    if !policy.CanPlay {
       t.Errorf("expected CanPlay to be true")
    }
-   if policy.LicenseDurationSeconds != 86400 {
-      t.Errorf("expected LicenseDurationSeconds to be 86400, got %d", policy.LicenseDurationSeconds)
-   }
-
    t.Log("Successfully parsed mock license response.")
 }

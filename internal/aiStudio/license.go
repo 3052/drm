@@ -8,57 +8,58 @@ import (
 
 // License is the message containing the keys and policies.
 type License struct {
-   Keys   []*License_Key
+   Id     *LicenseIdentification
    Policy *Policy
-   // ID is used as the session key for license renewals.
-   ID []byte
-   // Other fields like LicenseStartTime etc. can be added here if needed.
+   Keys   []*KeyContainer
 }
 
-// License_Key represents a single key (e.g., a content key).
-type License_Key struct {
-   ID        []byte
-   Type      KeyType
-   Key       []byte
-   Encrypted bool // Indicates if the Key field is encrypted
+// KeyContainer represents a single key (e.g., a content key).
+type KeyContainer struct {
+   ID   []byte
+   IV   []byte
+   Key  []byte
+   Type KeyType
 }
 
 // ParseLicense populates the License struct from a protobuf message.
 func (l *License) ParseLicense(msg protobuf.Message) error {
-   l.Keys = []*License_Key{} // Clear any existing keys
+   l.Keys = []*KeyContainer{} // Clear any existing keys
 
    for _, field := range msg {
       switch field.Tag.FieldNum {
-      case 1: // Repeated field for Keys
-         key := &License_Key{}
-         if err := key.ParseKey(field.Message); err != nil {
-            return fmt.Errorf("failed to parse license key: %w", err)
+      case 1: // id
+         l.Id = &LicenseIdentification{}
+         if err := l.Id.Parse(field.Message); err != nil {
+            return fmt.Errorf("failed to parse license identification: %w", err)
          }
-         l.Keys = append(l.Keys, key)
-      case 2: // Policy message
+      case 2: // policy
          l.Policy = &Policy{}
          if err := l.Policy.ParsePolicy(field.Message); err != nil {
             return fmt.Errorf("failed to parse policy: %w", err)
          }
-      case 3: // ID (Session Key)
-         l.ID = field.Bytes
+      case 3: // key (repeated)
+         key := &KeyContainer{}
+         if err := key.Parse(field.Message); err != nil {
+            return fmt.Errorf("failed to parse license key container: %w", err)
+         }
+         l.Keys = append(l.Keys, key)
       }
    }
    return nil
 }
 
-// ParseKey populates the License_Key struct from a protobuf message.
-func (lk *License_Key) ParseKey(msg protobuf.Message) error {
+// Parse populates the KeyContainer struct from a protobuf message.
+func (kc *KeyContainer) Parse(msg protobuf.Message) error {
    for _, field := range msg {
       switch field.Tag.FieldNum {
       case 1:
-         lk.ID = field.Bytes
+         kc.ID = field.Bytes
       case 2:
-         lk.Type = KeyType(field.Numeric)
+         kc.IV = field.Bytes
       case 3:
-         lk.Key = field.Bytes
+         kc.Key = field.Bytes
       case 4:
-         lk.Encrypted = field.Numeric == 1
+         kc.Type = KeyType(field.Numeric)
       }
    }
    return nil
