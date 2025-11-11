@@ -1,12 +1,19 @@
+// Description:
+//   Definitions of the protocol buffer messages used in the Widevine license
+//   exchange protocol, described in Widevine license exchange protocol document
+
 syntax = "proto2";
 
-package pywidevine_license_protocol;
+package video_widevine;
 
-// need this if we are using libprotobuf-cpp-2.3.0-lite
-option optimize_for = LITE_RUNTIME;
+import "protos/public/client_identification.proto";
+import "protos/public/drm_certificate.proto";
+import "protos/public/hash_algorithm.proto";
+import "protos/public/remote_attestation.proto";
 
-option java_package = "com.rlaphoenix.pywidevine.protos";
+option java_package = "com.google.video.widevine.protos";
 
+// option optimize_for = LITE_RUNTIME;
 enum LicenseType {
   STREAMING = 1;
   OFFLINE = 2;
@@ -39,9 +46,57 @@ message LicenseIdentification {
   optional LicenseType type = 4;
   optional int32 version = 5;
   optional bytes provider_session_token = 6;
+  // Set by the SDK representing the rental duration from the initial license.
+  optional int64 original_rental_duration_seconds = 7;
+  // Set by the SDK representing the playback duration from the initial license.
+  optional int64 original_playback_duration_seconds = 8;
+  // Set by the SDK representing the start time of the initial license in
+  // seconds (UTC). This is from the original license's license_start_time,
+  // which is from the LicenseRequest.request_time when set, or set by the
+  // server to be the time that the original license was processed.
+  optional int64 original_start_time_seconds = 9;
+}
+
+// This message is used to indicate the license cateogry spec for a license as
+// a part of initial license issuance.
+// LINT.IfChange
+message LicenseCategorySpec {
+  // Possible license categories.
+  enum LicenseCategory {
+    // By default, License is used for single content.
+    SINGLE_CONTENT_LICENSE_DEFAULT = 0;
+    // License is used for multiple contents (could be a combination of
+    // single contents and groups of contents).
+    MULTI_CONTENT_LICENSE = 1;
+    // License is used for contents logically grouped.
+    GROUP_LICENSE = 2;
+  }
+  // Optional. License category indicates if license is used for single
+  // content, multiple contents (could be a combination of
+  // single contents and groups of contents) or a group of contents.
+  optional LicenseCategory license_category = 1;
+  // Optional. Content or group ID covered by the license.
+  oneof content_or_group_id {
+    // Content_id would be present if it is a license for single content.
+    bytes content_id = 2;
+    // Group_id would be present if the license is a multi_content_license or
+    // group_license. Group Id could be the name of a group of contents,
+    // defined by licensor.
+    bytes group_id = 3;
+  }
+}
+// LINT.ThenChange(//depot/google3/google/chrome/widevine/licensedata/v1/session_init.proto)
+
+message ProxyInfo {
+  // Indicates SDK type(Including UNKNOWN_SERVICE_TYPE, LICENSE_PROXY_SDK,
+  // CAS_PROXY_SDK).
+  optional DrmCertificate.ServiceType sdk_type = 1;
+  // Indicates the version of SDK.
+  optional string sdk_version = 2;
 }
 
 message License {
+  // LINT.IfChange
   message Policy {
     // Indicates that playback of the content is allowed.
     optional bool can_play = 1 [default = false];
@@ -109,15 +164,20 @@ message License {
     // playbacks will not be allowed once rental duration expires. Optional.
     optional bool soft_enforce_rental_duration = 15 [default = true];
   }
+  // LINT.ThenChange(//depot/google3/google/chrome/widevine/licensedata/v1/license_policy.proto)
 
   message KeyContainer {
     enum KeyType {
-      SIGNING = 1;           // Exactly one key of this type must appear.
+      SIGNING = 1;           // No more than one signing key may appear.
       CONTENT = 2;           // Content key.
       KEY_CONTROL = 3;       // Key control block for license renewals. No key.
       OPERATOR_SESSION = 4;  // wrapped keys for auxiliary crypto operations.
       ENTITLEMENT = 5;       // Entitlement keys.
       OEM_CONTENT = 6;       // Partner-specific content key.
+      // Public signing key provided by content providers. Currently used by CAS
+      // for verifying the received ECM/EMM signature. Only EC key is supported
+      // for now.
+      PROVIDER_ECM_VERIFIER_PUBLIC_KEY = 7;
     }
 
     // The SecurityLevel enumeration allows the server to communicate the level
@@ -144,8 +204,6 @@ message License {
     }
 
     message KeyControl {
-      // |key_control| is documented in:
-      // Widevine Modular DRM Security Integration Guide for CENC
       // If present, the key control must be communicated to the secure
       // environment prior to any usage. This message is automatically generated
       // by the Widevine License Server SDK.
@@ -191,6 +249,9 @@ message License {
       optional bool disable_analog_output = 4 [default = false];
       // Optional requirement to indicate digital output is not allowed.
       optional bool disable_digital_output = 5 [default = false];
+      // Optional. If set, it indicates digital video recording (DVR) is
+      // allowed.
+      optional bool allow_record = 6 [default = false];
     }
 
     message VideoResolutionConstraint {
@@ -209,6 +270,28 @@ message License {
       optional bool allow_decrypt = 2 [default = false];
       optional bool allow_sign = 3 [default = false];
       optional bool allow_signature_verify = 4 [default = false];
+    }
+
+    // KeyCategorySpec message is used to identify if current key is generated
+    // for a single content or a group of contents. Currently it is only used in
+    // CAS request.
+    message KeyCategorySpec {
+      // Represents what kind of content a key is used for.
+      enum KeyCategory {
+        // By default, key is created for single content.
+        SINGLE_CONTENT_KEY_DEFAULT = 0;
+        // Key is created for a group of contents.
+        GROUP_KEY = 1;
+      }
+      // Indicate if the current key is created for single content or for group
+      // use.
+      optional KeyCategory key_category = 1;
+      // Id for key category. If it is a key for single content, this id
+      // represents the content_id. Otherwise, it represents a group_id.
+      oneof content_or_group_id {
+        bytes content_id = 2;
+        bytes group_id = 3;
+      }
     }
 
     optional bytes id = 1;
@@ -236,7 +319,12 @@ message License {
     // Optional not limited to commonly known track types such as SD, HD.
     // It can be some provider defined label to identify the track.
     optional string track_label = 12;
+    // Optional. It is used to identify if current key is generated for a
+    // single content or a group of contents. Currently it is only used in CAS
+    // request.
+    optional KeyCategorySpec key_category_spec = 13;
   }
+  // LINT.ThenChange(//depot/google3/google/chrome/widevine/licensedata/v1/key_container.proto)
 
   optional LicenseIdentification id = 1;
   optional Policy policy = 2;
@@ -245,6 +333,8 @@ message License {
   // LicenseRequest.request_time.  If this time is not set in the request,
   // the local time at the license service is used in this field.
   optional int64 license_start_time = 4;
+  // TODO(b/65054419): Deprecate remote_attestation_verified in favor of
+  // platform_verification_status, below.
   optional bool remote_attestation_verified = 5 [default = false];
   // Client token generated by the content provider. Optional.
   optional bytes provider_client_token = 6;
@@ -254,8 +344,6 @@ message License {
   // 8 byte verification field "HDCPDATA" followed by unsigned 32 bit minimum
   // HDCP SRM version (whether the version is for HDCP1 SRM or HDCP2 SRM
   // depends on client max_hdcp_version).
-  // Additional details can be found in Widevine Modular DRM Security
-  // Integration Guide for CENC.
   optional bytes srm_requirement = 8;
   // If present this contains a signed SRM file (either HDCP1 SRM or HDCP2 SRM
   // depending on client max_hdcp_version) that should be installed on the
@@ -267,6 +355,10 @@ message License {
       [default = PLATFORM_NO_VERIFICATION];
   // IDs of the groups for which keys are delivered in this license, if any.
   repeated bytes group_ids = 11;
+  // Optional. LicenseCategorySpec is used to indicate the license cateogry for
+  // a license. It could be used as a part of initial license issuance or shown
+  // as a part of license in license response.
+  optional LicenseCategorySpec license_category_spec = 12;
 }
 
 enum ProtocolVersion {
@@ -342,6 +434,22 @@ message LicenseRequest {
   optional EncryptedClientIdentification encrypted_client_id = 8;
 }
 
+message LicenseError {
+  enum Error {
+    // The device credentials are invalid. The device must re-provision.
+    INVALID_DRM_DEVICE_CERTIFICATE = 1;
+    // The device credentials have been revoked. Re-provisioning is not
+    // possible.
+    REVOKED_DRM_DEVICE_CERTIFICATE = 2;
+    // The service is currently unavailable due to the backend being down
+    // or similar circumstances.
+    SERVICE_UNAVAILABLE = 3;
+    // The device credentials are expired. The device must re-provision.
+    EXPIRED_DRM_DEVICE_CERTIFICATE = 4;
+  }
+  optional Error error_code = 1;
+}
+
 message MetricData {
   enum MetricType {
     // The time spent in the 'stage', specified in microseconds.
@@ -390,8 +498,9 @@ message SignedMessage {
   enum SessionKeyType {
     UNDEFINED = 0;
     WRAPPED_AES_KEY = 1;
-    EPHERMERAL_ECC_PUBLIC_KEY = 2;
+    EPHEMERAL_ECC_PUBLIC_KEY = 2;
   }
+
   optional MessageType type = 1;
   optional bytes msg = 2;
   // Required field that contains the signature of the bytes of msg.
@@ -409,7 +518,7 @@ message SignedMessage {
   // Remote attestation data which will be present in the initial license
   // request for ChromeOS client devices operating in verified mode. Remote
   // attestation challenge data is |msg| field above. Optional.
-  optional bytes remote_attestation = 5;
+  optional RemoteAttestation remote_attestation = 5;
 
   repeated MetricData metric_data = 6;
   // Version information from the SDK and license service. This information is
@@ -421,332 +530,9 @@ message SignedMessage {
   // The core message is the simple serialization of fields used by OEMCrypto.
   // This field was introduced in OEMCrypto API v16.
   optional bytes oemcrypto_core_message = 9;
-}
-
-enum HashAlgorithmProto {
-  // Unspecified hash algorithm: SHA_256 shall be used for ECC based algorithms
-  // and SHA_1 shall be used otherwise.
-  HASH_ALGORITHM_UNSPECIFIED = 0;
-  HASH_ALGORITHM_SHA_1 = 1;
-  HASH_ALGORITHM_SHA_256 = 2;
-  HASH_ALGORITHM_SHA_384 = 3;
-}
-
-// ClientIdentification message used to authenticate the client device.
-message ClientIdentification {
-  enum TokenType {
-    KEYBOX = 0;
-    DRM_DEVICE_CERTIFICATE = 1;
-    REMOTE_ATTESTATION_CERTIFICATE = 2;
-    OEM_DEVICE_CERTIFICATE = 3;
-  }
-
-  message NameValue {
-    optional string name = 1;
-    optional string value = 2;
-  }
-
-  // Capabilities which not all clients may support. Used for the license
-  // exchange protocol only.
-  message ClientCapabilities {
-    enum HdcpVersion {
-      HDCP_NONE = 0;
-      HDCP_V1 = 1;
-      HDCP_V2 = 2;
-      HDCP_V2_1 = 3;
-      HDCP_V2_2 = 4;
-      HDCP_V2_3 = 5;
-      HDCP_NO_DIGITAL_OUTPUT = 0xff;
-    }
-
-    enum CertificateKeyType {
-      RSA_2048 = 0;
-      RSA_3072 = 1;
-      ECC_SECP256R1 = 2;
-      ECC_SECP384R1 = 3;
-      ECC_SECP521R1 = 4;
-    }
-
-    enum AnalogOutputCapabilities {
-      ANALOG_OUTPUT_UNKNOWN = 0;
-      ANALOG_OUTPUT_NONE = 1;
-      ANALOG_OUTPUT_SUPPORTED = 2;
-      ANALOG_OUTPUT_SUPPORTS_CGMS_A = 3;
-    }
-
-    optional bool client_token = 1 [default = false];
-    optional bool session_token = 2 [default = false];
-    optional bool video_resolution_constraints = 3 [default = false];
-    optional HdcpVersion max_hdcp_version = 4 [default = HDCP_NONE];
-    optional uint32 oem_crypto_api_version = 5;
-    // Client has hardware support for protecting the usage table, such as
-    // storing the generation number in secure memory.  For Details, see:
-    // Widevine Modular DRM Security Integration Guide for CENC
-    optional bool anti_rollback_usage_table = 6 [default = false];
-    // The client shall report |srm_version| if available.
-    optional uint32 srm_version = 7;
-    // A device may have SRM data, and report a version, but may not be capable
-    // of updating SRM data.
-    optional bool can_update_srm = 8 [default = false];
-    repeated CertificateKeyType supported_certificate_key_type = 9;
-    optional AnalogOutputCapabilities analog_output_capabilities = 10
-        [default = ANALOG_OUTPUT_UNKNOWN];
-    optional bool can_disable_analog_output = 11 [default = false];
-    // Clients can indicate a performance level supported by OEMCrypto.
-    // This will allow applications and providers to choose an appropriate
-    // quality of content to serve. Currently defined tiers are
-    // 1 (low), 2 (medium) and 3 (high). Any other value indicates that
-    // the resource rating is unavailable or reporting erroneous values
-    // for that device. For details see,
-    // Widevine Modular DRM Security Integration Guide for CENC
-    optional uint32 resource_rating_tier = 12 [default = 0];
-  }
-
-  message ClientCredentials {
-    optional TokenType type = 1 [default = KEYBOX];
-    optional bytes token = 2;
-  }
-
-  // Type of factory-provisioned device root of trust. Optional.
-  optional TokenType type = 1 [default = KEYBOX];
-  // Factory-provisioned device root of trust. Required.
-  optional bytes token = 2;
-  // Optional client information name/value pairs.
-  repeated NameValue client_info = 3;
-  // Client token generated by the content provider. Optional.
-  optional bytes provider_client_token = 4;
-  // Number of licenses received by the client to which the token above belongs.
-  // Only present if client_token is specified.
-  optional uint32 license_counter = 5;
-  // List of non-baseline client capabilities.
-  optional ClientCapabilities client_capabilities = 6;
-  // Serialized VmpData message. Optional.
-  optional bytes vmp_data = 7;
-  // Optional field that may contain additional provisioning credentials.
-  repeated ClientCredentials device_credentials = 8;
-}
-
-// EncryptedClientIdentification message used to hold ClientIdentification
-// messages encrypted for privacy purposes.
-message EncryptedClientIdentification {
-  // Provider ID for which the ClientIdentifcation is encrypted (owner of
-  // service certificate).
-  optional string provider_id = 1;
-  // Serial number for the service certificate for which ClientIdentification is
-  // encrypted.
-  optional bytes service_certificate_serial_number = 2;
-  // Serialized ClientIdentification message, encrypted with the privacy key
-  // using AES-128-CBC with PKCS#5 padding.
-  optional bytes encrypted_client_id = 3;
-  // Initialization vector needed to decrypt encrypted_client_id.
-  optional bytes encrypted_client_id_iv = 4;
-  // AES-128 privacy key, encrypted with the service public key using RSA-OAEP.
-  optional bytes encrypted_privacy_key = 5;
-}
-
-// DRM certificate definition for user devices, intermediate, service, and root
-// certificates.
-message DrmCertificate {
-  enum Type {
-    ROOT = 0;  // ProtoBestPractices: ignore.
-    DEVICE_MODEL = 1;
-    DEVICE = 2;
-    SERVICE = 3;
-    PROVISIONER = 4;
-  }
-  enum ServiceType {
-    UNKNOWN_SERVICE_TYPE = 0;
-    LICENSE_SERVER_SDK = 1;
-    LICENSE_SERVER_PROXY_SDK = 2;
-    PROVISIONING_SDK = 3;
-    CAS_PROXY_SDK = 4;
-  }
-  enum Algorithm {
-    UNKNOWN_ALGORITHM = 0;
-    RSA = 1;
-    ECC_SECP256R1 = 2;
-    ECC_SECP384R1 = 3;
-    ECC_SECP521R1 = 4;
-  }
-
-  message EncryptionKey {
-    // Device public key. PKCS#1 ASN.1 DER-encoded. Required.
-    optional bytes public_key = 1;
-    // Required. The algorithm field contains the curve used to create the
-    // |public_key| if algorithm is one of the ECC types.
-    // The |algorithm| is used for both to determine the if the certificate is
-    // ECC or RSA. The |algorithm| also specifies the parameters that were used
-    // to create |public_key| and are used to create an ephemeral session key.
-    optional Algorithm algorithm = 2 [default = RSA];
-  }
-
-  // Type of certificate. Required.
-  optional Type type = 1;
-  // 128-bit globally unique serial number of certificate.
-  // Value is 0 for root certificate. Required.
-  optional bytes serial_number = 2;
-  // POSIX time, in seconds, when the certificate was created. Required.
-  optional uint32 creation_time_seconds = 3;
-  // POSIX time, in seconds, when the certificate should expire. Value of zero
-  // denotes indefinite expiry time. For more information on limited lifespan
-  // DRM certificates see (go/limited-lifespan-drm-certificates).
-  optional uint32 expiration_time_seconds = 12;
-  // Device public key. PKCS#1 ASN.1 DER-encoded. Required.
-  optional bytes public_key = 4;
-  // Widevine system ID for the device. Required for intermediate and
-  // user device certificates.
-  optional uint32 system_id = 5;
-  // Deprecated field, which used to indicate whether the device was a test
-  // (non-production) device. The test_device field in ProvisionedDeviceInfo
-  // below should be observed instead.
-  optional bool test_device_deprecated = 6 [deprecated = true];
-  // Service identifier (web origin) for the provider which owns the
-  // certificate. Required for service and provisioner certificates.
-  optional string provider_id = 7;
-  // This field is used only when type = SERVICE to specify which SDK uses
-  // service certificate. This repeated field is treated as a set. A certificate
-  // may be used for the specified service SDK if the appropriate ServiceType
-  // is specified in this field.
-  repeated ServiceType service_types = 8;
-  // Required. The algorithm field contains the curve used to create the
-  // |public_key| if algorithm is one of the ECC types.
-  // The |algorithm| is used for both to determine the if the certificate is ECC
-  // or RSA. The |algorithm| also specifies the parameters that were used to
-  // create |public_key| and are used to create an ephemeral session key.
-  optional Algorithm algorithm = 9 [default = RSA];
-  // Optional. May be present in DEVICE certificate types. This is the root
-  // of trust identifier that holds an encrypted value that identifies the
-  // keybox or other root of trust that was used to provision a DEVICE drm
-  // certificate.
-  optional bytes rot_id = 10;
-  // Optional. May be present in devices that explicitly support dual keys. When
-  // present the |public_key| is used for verification of received license
-  // request messages.
-  optional EncryptionKey encryption_key = 11;
-}
-
-// DrmCertificate signed by a higher (CA) DRM certificate.
-message SignedDrmCertificate {
-  // Serialized certificate. Required.
-  optional bytes drm_certificate = 1;
-  // Signature of certificate. Signed with root or intermediate
-  // certificate specified below. Required.
-  optional bytes signature = 2;
-  // SignedDrmCertificate used to sign this certificate.
-  optional SignedDrmCertificate signer = 3;
   // Optional field that indicates the hash algorithm used in signature scheme.
-  optional HashAlgorithmProto hash_algorithm = 4;
-}
-
-message WidevinePsshData {
-  enum Type {
-    SINGLE = 0;        // Single PSSH to be used to retrieve content keys.
-    ENTITLEMENT = 1;   // Primary PSSH used to retrieve entitlement keys.
-    ENTITLED_KEY = 2;  // Secondary PSSH containing entitled key(s).
-  }
-
-  message EntitledKey {
-    // ID of entitlement key used for wrapping |key|.
-    optional bytes entitlement_key_id = 1;
-    // ID of the entitled key.
-    optional bytes key_id = 2;
-    // Wrapped key. Required.
-    optional bytes key = 3;
-    // IV used for wrapping |key|. Required.
-    optional bytes iv = 4;
-    // Size of entitlement key used for wrapping |key|.
-    optional uint32 entitlement_key_size_bytes = 5 [default = 32];
-  }
-
-  // Entitlement or content key IDs. Can onnly present in SINGLE or ENTITLEMENT
-  // PSSHs. May be repeated to facilitate delivery of multiple keys in a
-  // single license. Cannot be used in conjunction with content_id or
-  // group_ids, which are the preferred mechanism.
-  repeated bytes key_ids = 2;
-
-  // Content identifier which may map to multiple entitlement or content key
-  // IDs to facilitate the delivery of multiple keys in a single license.
-  // Cannot be present in conjunction with key_ids, but if used must be in all
-  // PSSHs.
-  optional bytes content_id = 4;
-
-  // Crypto period index, for media using key rotation. Always corresponds to
-  // The content key period. This means that if using entitlement licensing
-  // the ENTITLED_KEY PSSHs will have sequential crypto_period_index's, whereas
-  // the ENTITELEMENT PSSHs will have gaps in the sequence. Required if doing
-  // key rotation.
-  optional uint32 crypto_period_index = 7;
-
-  // Protection scheme identifying the encryption algorithm. The protection
-  // scheme is represented as a uint32 value. The uint32 contains 4 bytes each
-  // representing a single ascii character in one of the 4CC protection scheme
-  // values. To be deprecated in favor of signaling from content.
-  // 'cenc' (AES-CTR) protection_scheme = 0x63656E63,
-  // 'cbc1' (AES-CBC) protection_scheme = 0x63626331,
-  // 'cens' (AES-CTR pattern encryption) protection_scheme = 0x63656E73,
-  // 'cbcs' (AES-CBC pattern encryption) protection_scheme = 0x63626373.
-  optional uint32 protection_scheme = 9;
-
-  // Optional. For media using key rotation, this represents the duration
-  // of each crypto period in seconds.
-  optional uint32 crypto_period_seconds = 10;
-
-  // Type of PSSH. Required if not SINGLE.
-  optional Type type = 11 [default = SINGLE];
-
-  // Key sequence for Widevine-managed keys. Optional.
-  optional uint32 key_sequence = 12;
-
-  // Group identifiers for all groups to which the content belongs. This can
-  // be used to deliver licenses to unlock multiple titles / channels.
-  // Optional, and may only be present in ENTITLEMENT and ENTITLED_KEY PSSHs, and
-  // not in conjunction with key_ids.
-  repeated bytes group_ids = 13;
-
-  // Copy/copies of the content key used to decrypt the media stream in which
-  // the PSSH box is embedded, each wrapped with a different entitlement key.
-  // May also contain sub-licenses to support devices with OEMCrypto 13 or
-  // older. May be repeated if using group entitlement keys. Present only in
-  // PSSHs of type ENTITLED_KEY.
-  repeated EntitledKey entitled_keys = 14;
-
-  // Video feature identifier, which is used in conjunction with |content_id|
-  // to determine the set of keys to be returned in the license. Cannot be
-  // present in conjunction with |key_ids|.
-  // Current values are "HDR".
-  optional string video_feature = 15;
-
-  ////////////////////////////  Deprecated Fields  ////////////////////////////
-  enum Algorithm {
-    UNENCRYPTED = 0;
-    AESCTR = 1;
-  };
-  optional Algorithm algorithm = 1 [deprecated = true];
-
-  // Content provider name.
-  optional string provider = 3 [deprecated = true];
-
-  // Track type. Acceptable values are SD, HD and AUDIO. Used to
-  // differentiate content keys used by an asset.
-  optional string track_type = 5 [deprecated = true];
-
-  // The name of a registered policy to be used for this asset.
-  optional string policy = 6 [deprecated = true];
-
-  // Optional protected context for group content. The grouped_license is a
-  // serialized SignedMessage.
-  optional bytes grouped_license = 8 [deprecated = true];
-}
-
-// File Hashes for Verified Media Path (VMP) support.
-message FileHashes {
-  message Signature {
-    optional string filename = 1;
-    optional bool test_signing = 2; //0 - release, 1 - testing
-    optional bytes SHA512Hash = 3;
-    optional bool main_exe = 4; //0 for dlls, 1 for exe, this is field 3 in file
-    optional bytes signature = 5;
-  }
-  optional bytes signer = 1;
-  repeated Signature signatures = 2;
+  optional HashAlgorithmProto hash_algorithm = 10;
+  // If true it indicates that a LICENSE message session key was based on an
+  // alternate key provided by the client credentials.
+  optional bool using_secondary_key = 11;
 }

@@ -39,8 +39,8 @@ func TestParseWidevineHeader(t *testing.T) {
    }
 }
 
-// Test the full flow from header bytes -> request -> challenge.
-func TestLicenseRequestAndChallenge(t *testing.T) {
+// Test building the challenge directly from header bytes.
+func TestBuildChallenge(t *testing.T) {
    // 1. Create mock WidevineCencHeader protobuf data
    keyID := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0xaa, 0xbb, 0xcc, 0xdd, 0xaa, 0xbb, 0xcc, 0xdd, 0xaa, 0xbb, 0xcc, 0xdd}
    contentID := []byte("my_content")
@@ -51,22 +51,15 @@ func TestLicenseRequestAndChallenge(t *testing.T) {
    headerBytes, err := headerMsg.Encode()
    check(t, err)
 
-   // 2. Create mock client info data
-   clientInfoMsg := protobuf.Message{
-      protobuf.NewString(ClientInfo_DeviceModel, "GoTest"),
-   }
-   clientInfoBytes, err := clientInfoMsg.Encode()
+   // 2. Define mock client info bytes, as a user would provide them.
+   // This represents a protobuf message with field 5 (DeviceModel) set to "GoTest".
+   clientInfoBytes := []byte{0x2a, 0x06, 'G', 'o', 'T', 'e', 's', 't'}
+
+   // 3. Build the final challenge in a single step
+   challengeBytes, err := BuildChallenge(headerBytes, clientInfoBytes)
    check(t, err)
 
-   // 3. Create the license request directly from the header bytes
-   licenseRequest, err := NewLicenseRequest(headerBytes, clientInfoBytes)
-   check(t, err)
-
-   // 4. Build the final challenge
-   challengeBytes, err := BuildChallenge(licenseRequest)
-   check(t, err)
-
-   // 5. Parse and verify the final challenge
+   // 4. Parse and verify the final challenge
    var signedMsg protobuf.Message
    err = signedMsg.Parse(challengeBytes)
    check(t, err)
@@ -97,7 +90,7 @@ func TestLicenseRequestAndChallenge(t *testing.T) {
    }
 }
 
-// Test parsing a license response. (Unchanged)
+// Test parsing a license response.
 func TestParseLicenseResponse(t *testing.T) {
    keyID1 := []byte{0x11, 0x22, 0x33, 0x44, 0x11, 0x22, 0x33, 0x44, 0x11, 0x22, 0x33, 0x44, 0x11, 0x22, 0x33, 0x44}
    keyValue1 := []byte{0xda, 0xd1, 0xb2, 0xd3, 0xda, 0xd1, 0xb2, 0xd3, 0xda, 0xd1, 0xb2, 0xd3, 0xda, 0xd1, 0xb2, 0xd3}

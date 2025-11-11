@@ -91,6 +91,7 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
    // 1. Construct a mock License message according to the provided proto file.
    mockSessionID := []byte("mock-session-id")
    mockKeyID := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00}
+   mockIV := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01}
    mockContentKey := []byte{0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}
 
    licenseMsg := protobuf.Message{
@@ -107,6 +108,7 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
       // Field 3: KeyContainer (repeated)
       protobuf.NewMessage(3,
          protobuf.NewBytes(1, mockKeyID),
+         protobuf.NewBytes(2, mockIV), // Added the missing IV
          protobuf.NewBytes(3, mockContentKey),
          protobuf.NewVarint(4, uint64(KeyType_CONTENT)),
       ),
@@ -156,6 +158,9 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
    key := parsedResponse.License.Keys[0]
    if !bytes.Equal(key.ID, mockKeyID) {
       t.Errorf("key ID mismatch")
+   }
+   if !bytes.Equal(key.IV, mockIV) { // Added verification for IV
+      t.Errorf("IV mismatch")
    }
    if !bytes.Equal(key.Key, mockContentKey) {
       t.Errorf("content key mismatch")

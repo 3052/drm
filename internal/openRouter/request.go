@@ -6,27 +6,26 @@ import (
    "time"
 )
 
-// NewLicenseRequest creates a license request message payload directly from raw WidevineCencHeader protobuf bytes.
-// This is an efficient method that avoids decoding the header into a struct and re-encoding it.
+// BuildChallenge creates the full license challenge payload to be sent to the server.
+// It constructs a LicenseRequest from the provided header and client info,
+// wraps it in a SignedMessage, and returns the final encoded bytes in a single step.
 // - headerBytes: Raw bytes of the WidevineCencHeader protobuf message.
 // - clientInfoBytes: Pre-encoded ClientInfo protobuf message.
-func NewLicenseRequest(headerBytes []byte, clientInfoBytes []byte) (protobuf.Message, error) {
-   // Perform a low-level parse of the header to access its fields.
+func BuildChallenge(headerBytes []byte, clientInfoBytes []byte) ([]byte, error) {
+   // Parse the header bytes to access its fields.
    var headerMsg protobuf.Message
    if err := headerMsg.Parse(headerBytes); err != nil {
       return nil, fmt.Errorf("failed to parse headerBytes: %w", err)
    }
 
+   // Build the inner LicenseRequest message fields.
    var requestFields protobuf.Message
 
-   // Find the ContentId field in the header and add it to the request
-   // with the correct field tag for a LicenseRequest.
+   // Copy ContentId and KeyId(s) from the header to the request,
+   // assigning the correct field tags for a LicenseRequest.
    if field, ok := headerMsg.Field(WidevineCencHeader_ContentId); ok {
       requestFields = append(requestFields, protobuf.NewBytes(LicenseRequest_ContentId, field.Bytes))
    }
-
-   // Iterate over all KeyId fields in the header and add them to the request
-   // with the correct field tag.
    keyIDIterator := headerMsg.Iterator(WidevineCencHeader_KeyId)
    for keyIDIterator.Next() {
       field := keyIDIterator.Field()
@@ -35,7 +34,7 @@ func NewLicenseRequest(headerBytes []byte, clientInfoBytes []byte) (protobuf.Mes
       }
    }
 
-   // Add the other standard fields for a license request.
+   // Add the other standard request fields.
    requestFields = append(requestFields, protobuf.NewVarint(LicenseRequest_Type, LicenseRequestType_NEW))
    requestFields = append(requestFields, protobuf.NewVarint(LicenseRequest_RequestTime, uint64(time.Now().Unix())))
 
@@ -48,16 +47,13 @@ func NewLicenseRequest(headerBytes []byte, clientInfoBytes []byte) (protobuf.Mes
       requestFields = append(requestFields, protobuf.NewMessage(LicenseRequest_ClientInfo, clientInfoMsg...))
    }
 
-   return protobuf.Message(requestFields), nil
-}
-
-// BuildChallenge wraps the license request in a SignedMessage to create the final challenge.
-func BuildChallenge(licenseRequest protobuf.Message) ([]byte, error) {
-   encodedRequest, err := licenseRequest.Encode()
+   // Encode the inner request.
+   encodedRequest, err := requestFields.Encode()
    if err != nil {
-      return nil, fmt.Errorf("failed to encode license request: %w", err)
+      return nil, fmt.Errorf("failed to encode internal license request: %w", err)
    }
 
+   // Wrap the encoded request in the final SignedMessage.
    signedMessage := protobuf.Message{
       protobuf.NewVarint(SignedMessage_Type, SignedMessageType_LICENSE_REQUEST),
       protobuf.NewBytes(SignedMessage_Msg, encodedRequest),
