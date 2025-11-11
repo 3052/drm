@@ -8,10 +8,10 @@ import (
 
 // SignedLicenseResponse is the top-level message received from the server.
 type SignedLicenseResponse struct {
-   Type      MessageType
-   License   *License
-   Signature []byte
-   // Other fields like SessionKey can be added here.
+   Type       MessageType
+   License    *License
+   Signature  []byte
+   SessionKey []byte
 }
 
 // ParseSignedLicenseResponse parses the raw bytes from a license server
@@ -34,6 +34,8 @@ func ParseSignedLicenseResponse(data []byte) (*SignedLicenseResponse, error) {
          }
       case 3: // Signature
          resp.Signature = field.Bytes
+      case 4: // SessionKey (Corrected field number)
+         resp.SessionKey = field.Bytes
       }
    }
 

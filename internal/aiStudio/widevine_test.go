@@ -71,11 +71,10 @@ func TestCreateWidevineLicenseRequest(t *testing.T) {
 
    // 8. Create the SignedLicenseRequest message with the real signature.
    signedLicenseRequest := &SignedLicenseRequest{
-      Type:               MessageType_LICENSE_REQUEST,
-      Msg:                licenseRequestBytes,
-      Signature:          signature,
-      SessionKey:         []byte("a-real-session-key-would-go-here"),
-      SignatureAlgorithm: SignatureAlgorithm_RSASSA_PSS_SHA1,
+      Type:       MessageType_LICENSE_REQUEST,
+      Msg:        licenseRequestBytes,
+      Signature:  signature,
+      SessionKey: []byte("a-real-session-key-would-go-here"),
    }
 
    // 9. Encode the final SignedLicenseRequest.
@@ -91,7 +90,6 @@ func TestCreateWidevineLicenseRequest(t *testing.T) {
 
 func TestParseWidevineLicenseResponse(t *testing.T) {
    // 1. Construct a mock License message.
-   // This simulates the data a license server would create.
    mockKeyID := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00}
    mockContentKey := []byte{0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef}
 
@@ -99,7 +97,7 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
       // A License_Key
       protobuf.NewMessage(1,
          protobuf.NewBytes(1, mockKeyID),
-         protobuf.NewVarint(2, uint64(KeyType_CONTENT)),
+         protobuf.NewVarint(2, uint64(KeyType_CONTENT)), // Corrected enum value to 2
          protobuf.NewBytes(3, mockContentKey),
       ),
       // A Policy
@@ -116,10 +114,12 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
 
    // 2. Construct a mock SignedLicenseResponse containing the license.
    mockSignature := []byte("this-is-a-mock-server-signature")
+   mockSessionKey := []byte("this-is-the-session-key-for-renewals")
    signedResponseMsg := protobuf.Message{
       protobuf.NewVarint(1, uint64(MessageType_LICENSE_RESPONSE)),
       protobuf.NewBytes(2, licenseBytes),
       protobuf.NewBytes(3, mockSignature),
+      protobuf.NewBytes(4, mockSessionKey), // Corrected field number to 4
    }
    signedResponseBytes, err := signedResponseMsg.Encode()
    if err != nil {
@@ -138,6 +138,9 @@ func TestParseWidevineLicenseResponse(t *testing.T) {
    }
    if !bytes.Equal(parsedResponse.Signature, mockSignature) {
       t.Errorf("signature mismatch")
+   }
+   if !bytes.Equal(parsedResponse.SessionKey, mockSessionKey) {
+      t.Errorf("session key mismatch")
    }
    if parsedResponse.License == nil {
       t.Fatal("parsed license is nil")

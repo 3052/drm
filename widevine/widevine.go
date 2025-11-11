@@ -15,6 +15,26 @@ import (
    "iter"
 )
 
+func (r ResponseBody) Container() iter.Seq[KeyContainer] {
+   return func(yield func(KeyContainer) bool) {
+      license, ok := r[0].Field(2) // License msg
+      if ok {
+         container := license.Message.Iterator(3) // KeyContainer key
+         for container.Next() {
+            field := container.Field()
+            if !yield(KeyContainer{field.Message}) {
+               return
+            }
+         }
+      }
+   }
+}
+
+func (r ResponseBody) sessionKey() []byte {
+   field, _ := r[0].Field(4)
+   return field.Bytes
+}
+
 func (c *Cdm) RequestBody() ([]byte, error) {
    hash := sha1.Sum(c.license_request)
    signature, err := rsa.SignPSS(
@@ -104,21 +124,6 @@ func (fill) Read(data []byte) (int, error) {
 
 type fill struct{}
 
-func (r ResponseBody) Container() iter.Seq[KeyContainer] {
-   return func(yield func(KeyContainer) bool) {
-      license, ok := r[0].Field(2) // License msg
-      if ok {
-         container := license.Message.Iterator(3) // KeyContainer key
-         for container.Next() {
-            field := container.Field()
-            if !yield(KeyContainer{field.Message}) {
-               return
-            }
-         }
-      }
-   }
-}
-
 func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
    field, ok := k[0].Field(3) // bytes key
    if !ok {
@@ -159,8 +164,3 @@ type Cdm struct {
 }
 
 type KeyContainer [1]protobuf.Message
-
-func (r ResponseBody) sessionKey() []byte {
-   field, _ := r[0].Field(4)
-   return field.Bytes
-}

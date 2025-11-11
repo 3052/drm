@@ -10,14 +10,6 @@ const (
    LicenseType_OFFLINE LicenseType = 1
 )
 
-// SignatureAlgorithm defines the algorithm used for the request signature.
-type SignatureAlgorithm int32
-
-const (
-   // RSASSA-PSS with SHA-1 digest.
-   SignatureAlgorithm_RSASSA_PSS_SHA1 SignatureAlgorithm = 1
-)
-
 // MessageType defines the type of the top-level signed message.
 type MessageType int32
 
@@ -35,13 +27,16 @@ const (
 )
 
 // KeyType defines the purpose of a key included in the license.
+// Values are based on the provided license_protocol.proto.
 type KeyType int32
 
 const (
    // Key is for signing.
-   KeyType_SIGNING KeyType = 0
+   KeyType_SIGNING KeyType = 1
    // Key is for content decryption.
-   KeyType_CONTENT KeyType = 1
-   // Key is an RSA key used for remote attestation.
-   KeyType_REMOTE_ATTESTATION KeyType = 2
+   KeyType_CONTENT KeyType = 2
+   // Key control block for license renewals.
+   KeyType_KEY_CONTROL KeyType = 3
+   // Wrapped keys for auxiliary crypto operations.
+   KeyType_OPERATOR_SESSION KeyType = 4
 )

@@ -10,7 +10,9 @@ import (
 type License struct {
    Keys   []*License_Key
    Policy *Policy
-   // Other fields like ID, LicenseStartTime etc. can be added here if needed.
+   // ID is used as the session key for license renewals.
+   ID []byte
+   // Other fields like LicenseStartTime etc. can be added here if needed.
 }
 
 // License_Key represents a single key (e.g., a content key).
@@ -38,6 +40,8 @@ func (l *License) ParseLicense(msg protobuf.Message) error {
          if err := l.Policy.ParsePolicy(field.Message); err != nil {
             return fmt.Errorf("failed to parse policy: %w", err)
          }
+      case 3: // ID (Session Key)
+         l.ID = field.Bytes
       }
    }
    return nil
