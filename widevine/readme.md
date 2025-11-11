@@ -71,7 +71,9 @@ key_dumps\Android Emulator 5554/private_keys/4464/2770936375
 
 ## where did proto file come from?
 
-<https://github.com/rlaphoenix/pywidevine/blob/master/pywidevine/license_protocol.proto>
+~~~
+media_cas_proxy_sdk\ubuntu\protos\public
+~~~
 
 ## other tools
 
