@@ -2,6 +2,7 @@ package widevine
 
 import (
    "41.neocities.org/protobuf"
+   "crypto/rsa"
 )
 
 // SignedMessage reflects the structure of the Widevine SignedMessage protobuf.
@@ -11,13 +12,19 @@ type SignedMessage struct {
    Signature *protobuf.Field
 }
 
-// NewSignedMessage creates and initializes a new SignedMessage.
-func NewSignedMessage(messageType int, msg []byte, signature []byte) *SignedMessage {
+// NewSignedRequest creates a new SignedMessage for a license request.
+// It takes the license request bytes and signs them with the provided private key.
+func NewSignedRequest(privateKey *rsa.PrivateKey, msg []byte) (*SignedMessage, error) {
+   signature, err := signMessage(privateKey, msg)
+   if err != nil {
+      return nil, err
+   }
+
    return &SignedMessage{
-      Type:      protobuf.NewVarint(1, uint64(messageType)),
+      Type:      protobuf.NewVarint(1, 1), // MessageType LICENSE_REQUEST = 1
       Msg:       protobuf.NewBytes(2, msg),
       Signature: protobuf.NewBytes(3, signature),
-   }
+   }, nil
 }
 
 // Encode serializes the SignedMessage into the protobuf wire format.

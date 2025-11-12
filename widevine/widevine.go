@@ -15,48 +15,6 @@ import (
    "iter"
 )
 
-func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
-   field, ok := k[0].Field(3) // bytes key
-   if !ok {
-      return nil, errors.New(".Field(3)")
-   }
-   cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(field.Bytes, field.Bytes)
-   return padding.NewPKCS7Padding(aes.BlockSize).Unpad(field.Bytes)
-}
-
-func (k KeyContainer) iv() []byte {
-   field, _ := k[0].Field(2)
-   return field.Bytes
-}
-
-func (k KeyContainer) Id() []byte {
-   field, ok := k[0].Field(1)
-   if !ok {
-      return nil
-   }
-   return field.Bytes
-}
-
-func (r ResponseBody) Container() iter.Seq[KeyContainer] {
-   return func(yield func(KeyContainer) bool) {
-      license, ok := r[0].Field(2) // License msg
-      if ok {
-         container := license.Message.Iterator(3) // KeyContainer key
-         for container.Next() {
-            field := container.Field()
-            if !yield(KeyContainer{field.Message}) {
-               return
-            }
-         }
-      }
-   }
-}
-
-func (r ResponseBody) sessionKey() []byte {
-   field, _ := r[0].Field(4)
-   return field.Bytes
-}
-
 func (c *Cdm) RequestBody() ([]byte, error) {
    hash := sha1.Sum(c.license_request)
    signature, err := rsa.SignPSS(
@@ -106,6 +64,48 @@ func (c *Cdm) New(private_key, client_id, psshData []byte) error {
       return err
    }
    return nil
+}
+
+func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
+   field, ok := k[0].Field(3) // bytes key
+   if !ok {
+      return nil, errors.New(".Field(3)")
+   }
+   cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(field.Bytes, field.Bytes)
+   return padding.NewPKCS7Padding(aes.BlockSize).Unpad(field.Bytes)
+}
+
+func (k KeyContainer) iv() []byte {
+   field, _ := k[0].Field(2)
+   return field.Bytes
+}
+
+func (k KeyContainer) Id() []byte {
+   field, ok := k[0].Field(1)
+   if !ok {
+      return nil
+   }
+   return field.Bytes
+}
+
+func (r ResponseBody) Container() iter.Seq[KeyContainer] {
+   return func(yield func(KeyContainer) bool) {
+      license, ok := r[0].Field(2) // License msg
+      if ok {
+         container := license.Message.Iterator(3) // KeyContainer key
+         for container.Next() {
+            field := container.Field()
+            if !yield(KeyContainer{field.Message}) {
+               return
+            }
+         }
+      }
+   }
+}
+
+func (r ResponseBody) sessionKey() []byte {
+   field, _ := r[0].Field(4)
+   return field.Bytes
 }
 
 func (r *ResponseBody) Unmarshal(data []byte) error {
