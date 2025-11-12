@@ -7,6 +7,7 @@ import (
    "crypto/sha1"
    "crypto/x509"
    "encoding/pem"
+   "errors"
    "fmt"
 )
 
@@ -15,7 +16,7 @@ import (
 func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
    block, _ := pem.Decode(pemBytes)
    if block == nil {
-      return nil, fmt.Errorf("failed to decode PEM block containing private key")
+      return nil, errors.New("failed to decode PEM block containing private key")
    }
 
    // First, try to parse as a PKCS#8-encoded key
@@ -23,7 +24,7 @@ func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
    if err == nil {
       rsaKey, ok := key.(*rsa.PrivateKey)
       if !ok {
-         return nil, fmt.Errorf("key in PEM block is not an RSA private key")
+         return nil, errors.New("key in PEM block is not an RSA private key")
       }
       return rsaKey, nil
    }
@@ -39,27 +40,28 @@ func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 }
 
 // signMessage computes the SHA-1 hash of the message and signs it using the
-// private key with RSA-PKCS#1 v1.5 padding.
+// RSASSA-PSS scheme as directed.
 func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
+   // 1. Hash the message using SHA-1.
    hash := sha1.New()
    hash.Write(message)
    hashed := hash.Sum(nil)
 
-   signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA1, hashed)
+   // 2. Set PSS options with the specified SaltLength.
+   opts := &rsa.PSSOptions{
+      SaltLength: rsa.PSSSaltLengthEqualsHash, // Corrected as per your instruction
+      Hash:       crypto.SHA1,
+   }
+
+   // 3. Sign the hash using the RSASSA-PSS scheme.
+   signature, err := rsa.SignPSS(rand.Reader, privateKey, crypto.SHA1, hashed, opts)
    if err != nil {
-      return nil, fmt.Errorf("failed to sign message: %w", err)
+      return nil, fmt.Errorf("failed to sign message with PSS: %w", err)
    }
    return signature, nil
 }
 
-// decryptKey decrypts a ciphertext using RSA-OAEP with SHA-1.
-// This is used to decrypt the content key from the license server.
+// decryptKey decrypts a content key using RSA-OAEP. This remains correct.
 func decryptKey(privateKey *rsa.PrivateKey, ciphertext []byte) ([]byte, error) {
-   // The label for Widevine's OAEP is typically nil or empty.
-   // The hash function is SHA-1.
-   plaintext, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, ciphertext, nil)
-   if err != nil {
-      return nil, fmt.Errorf("failed to decrypt key with RSA-OAEP: %w", err)
-   }
-   return plaintext, nil
+   return rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, ciphertext, nil)
 }

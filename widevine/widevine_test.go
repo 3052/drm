@@ -9,7 +9,7 @@ import (
    "testing"
 )
 
-var ctv_ca = struct {
+var ctv = struct {
    content_id  string
    key         string
    key_id      string
@@ -24,7 +24,7 @@ var ctv_ca = struct {
 }
 
 func TestCtv(t *testing.T) {
-   key, err := base64.StdEncoding.DecodeString(ctv_ca.key)
+   key, err := base64.StdEncoding.DecodeString(ctv.key)
    if err != nil {
       t.Fatal(err)
    }
@@ -40,13 +40,13 @@ func TestCtv(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   key_id, err := base64.StdEncoding.DecodeString(ctv_ca.key_id)
+   key_id, err := base64.StdEncoding.DecodeString(ctv.key_id)
    if err != nil {
       t.Fatal(err)
    }
    var psshValue Pssh
    psshValue.KeyIds = [][]byte{key_id}
-   psshValue.ContentId, err = base64.StdEncoding.DecodeString(ctv_ca.content_id)
+   psshValue.ContentId, err = base64.StdEncoding.DecodeString(ctv.content_id)
    if err != nil {
       t.Fatal(err)
    }
@@ -63,7 +63,7 @@ func TestCtv(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   resp, err := http.Post(ctv_ca.url_license, "", bytes.NewReader(data))
+   resp, err := http.Post(ctv.url_license, "", bytes.NewReader(data))
    if err != nil {
       t.Fatal(err)
    }
