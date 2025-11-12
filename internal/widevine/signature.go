@@ -6,23 +6,35 @@ import (
    "crypto/rsa"
    "crypto/sha1"
    "crypto/x509"
+   "encoding/pem"
    "fmt"
 )
 
-// ParsePrivateKey parses a PKCS#8 encoded private key from a byte slice.
-func ParsePrivateKey(pkcs8 []byte) (*rsa.PrivateKey, error) {
-   key, err := x509.ParsePKCS8PrivateKey(pkcs8)
-   if err != nil {
-      // As a fallback for older PKCS#1 keys if PKCS#8 fails.
-      if key, err := x509.ParsePKCS1PrivateKey(pkcs8); err == nil {
-         return key, nil
+// ParsePrivateKey parses a PEM-encoded private key from a byte slice.
+// It supports both PKCS#8 ("PRIVATE KEY") and PKCS#1 ("RSA PRIVATE KEY") formats.
+func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
+   block, _ := pem.Decode(pemBytes)
+   if block == nil {
+      return nil, fmt.Errorf("failed to decode PEM block containing private key")
+   }
+
+   // First, try to parse as a PKCS#8-encoded key
+   key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+   if err == nil {
+      rsaKey, ok := key.(*rsa.PrivateKey)
+      if !ok {
+         return nil, fmt.Errorf("key in PEM block is not an RSA private key")
       }
-      return nil, fmt.Errorf("failed to parse private key as PKCS#8 or PKCS#1: %w", err)
+      return rsaKey, nil
    }
-   rsaKey, ok := key.(*rsa.PrivateKey)
-   if !ok {
-      return nil, fmt.Errorf("key is not an RSA private key")
+
+   // If PKCS#8 parsing fails, try to parse as a PKCS#1-encoded key
+   rsaKey, errPKCS1 := x509.ParsePKCS1PrivateKey(block.Bytes)
+   if errPKCS1 != nil {
+      // Return a more informative error if both parsing methods fail
+      return nil, fmt.Errorf("failed to parse private key; tried PKCS#8 (%v) and PKCS#1 (%v)", err, errPKCS1)
    }
+
    return rsaKey, nil
 }
 

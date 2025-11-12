@@ -9,6 +9,20 @@ import (
    "testing"
 )
 
+var ctv_ca = struct {
+   content_id  string
+   key         string
+   key_id      string
+   url_ctv     string
+   url_license string
+}{
+   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
+   key:         "xQ87t+z5cLOVgxDdSgHyoA==",
+   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
+   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
+   url_license: "https://license.9c9media.ca/widevine",
+}
+
 func TestCtv(t *testing.T) {
    key, err := base64.StdEncoding.DecodeString(ctv_ca.key)
    if err != nil {
@@ -82,18 +96,4 @@ func TestCtv(t *testing.T) {
       }
    }
    t.Fatal("key not found")
-}
-
-var ctv_ca = struct {
-   content_id  string
-   key         string
-   key_id      string
-   url_ctv     string
-   url_license string
-}{
-   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
-   key:         "xQ87t+z5cLOVgxDdSgHyoA==",
-   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
-   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
-   url_license: "https://license.9c9media.ca/widevine",
 }
