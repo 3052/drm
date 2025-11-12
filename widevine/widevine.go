@@ -15,6 +15,31 @@ import (
    "iter"
 )
 
+func (r ResponseBody) sessionKey() []byte {
+   field, _ := r[0].Field(4)
+   return field.Bytes
+}
+
+func (r ResponseBody) Container() iter.Seq[KeyContainer] {
+   return func(yield func(KeyContainer) bool) {
+      license, ok := r[0].Field(2) // License msg
+      if ok {
+         container := license.Message.Iterator(3) // KeyContainer key
+         for container.Next() {
+            field := container.Field()
+            if !yield(KeyContainer{field.Message}) {
+               return
+            }
+         }
+      }
+   }
+}
+
+type Cdm struct {
+   license_request []byte
+   private_key     *rsa.PrivateKey
+}
+
 func (c *Cdm) RequestBody() ([]byte, error) {
    hash := sha1.Sum(c.license_request)
    signature, err := rsa.SignPSS(
@@ -88,26 +113,6 @@ func (k KeyContainer) Id() []byte {
    return field.Bytes
 }
 
-func (r ResponseBody) Container() iter.Seq[KeyContainer] {
-   return func(yield func(KeyContainer) bool) {
-      license, ok := r[0].Field(2) // License msg
-      if ok {
-         container := license.Message.Iterator(3) // KeyContainer key
-         for container.Next() {
-            field := container.Field()
-            if !yield(KeyContainer{field.Message}) {
-               return
-            }
-         }
-      }
-   }
-}
-
-func (r ResponseBody) sessionKey() []byte {
-   field, _ := r[0].Field(4)
-   return field.Bytes
-}
-
 func (r *ResponseBody) Unmarshal(data []byte) error {
    return r[0].Parse(data)
 }
@@ -156,11 +161,6 @@ func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
       return nil, err
    }
    return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
-}
-
-type Cdm struct {
-   license_request []byte
-   private_key     *rsa.PrivateKey
 }
 
 type KeyContainer [1]protobuf.Message
