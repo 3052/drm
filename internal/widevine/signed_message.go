@@ -3,6 +3,8 @@ package widevine
 import (
    "41.neocities.org/protobuf"
    "crypto/rsa"
+   "crypto/x509"
+   "fmt"
 )
 
 // SignedMessage reflects the structure of the Widevine SignedMessage protobuf.
@@ -14,22 +16,27 @@ type SignedMessage struct {
 }
 
 // NewSignedRequest creates a new SignedMessage for a license request.
-// It takes the license request bytes and signs them with the provided private key.
-// The sessionKey is optional and can be nil.
-func NewSignedRequest(privateKey *rsa.PrivateKey, msg, sessionKey []byte) (*SignedMessage, error) {
+// It signs the request message and automatically generates the session_key
+// (the public key) from the provided private key.
+func NewSignedRequest(privateKey *rsa.PrivateKey, msg []byte) (*SignedMessage, error) {
+   // Sign the core request message.
    signature, err := signMessage(privateKey, msg)
    if err != nil {
       return nil, err
    }
 
-   sm := &SignedMessage{
-      Type:      protobuf.NewVarint(1, 1), // MessageType LICENSE_REQUEST = 1
-      Msg:       protobuf.NewBytes(2, msg),
-      Signature: protobuf.NewBytes(3, signature),
+   // The session_key for the request is the client's public key,
+   // serialized in the PKIX/SPKI format.
+   publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+   if err != nil {
+      return nil, fmt.Errorf("failed to marshal public key for session key: %w", err)
    }
 
-   if sessionKey != nil {
-      sm.SessionKey = protobuf.NewBytes(4, sessionKey)
+   sm := &SignedMessage{
+      Type:       protobuf.NewVarint(1, 1), // MessageType LICENSE_REQUEST = 1
+      Msg:        protobuf.NewBytes(2, msg),
+      Signature:  protobuf.NewBytes(3, signature),
+      SessionKey: protobuf.NewBytes(4, publicKeyBytes),
    }
 
    return sm, nil

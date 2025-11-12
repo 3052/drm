@@ -13,7 +13,11 @@ import (
 func ParsePrivateKey(pkcs8 []byte) (*rsa.PrivateKey, error) {
    key, err := x509.ParsePKCS8PrivateKey(pkcs8)
    if err != nil {
-      return nil, fmt.Errorf("failed to parse PKCS#8 private key: %w", err)
+      // As a fallback for older PKCS#1 keys if PKCS#8 fails.
+      if key, err := x509.ParsePKCS1PrivateKey(pkcs8); err == nil {
+         return key, nil
+      }
+      return nil, fmt.Errorf("failed to parse private key as PKCS#8 or PKCS#1: %w", err)
    }
    rsaKey, ok := key.(*rsa.PrivateKey)
    if !ok {
@@ -34,4 +38,16 @@ func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
       return nil, fmt.Errorf("failed to sign message: %w", err)
    }
    return signature, nil
+}
+
+// decryptKey decrypts a ciphertext using RSA-OAEP with SHA-1.
+// This is used to decrypt the content key from the license server.
+func decryptKey(privateKey *rsa.PrivateKey, ciphertext []byte) ([]byte, error) {
+   // The label for Widevine's OAEP is typically nil or empty.
+   // The hash function is SHA-1.
+   plaintext, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, ciphertext, nil)
+   if err != nil {
+      return nil, fmt.Errorf("failed to decrypt key with RSA-OAEP: %w", err)
+   }
+   return plaintext, nil
 }

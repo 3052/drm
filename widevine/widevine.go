@@ -15,10 +15,36 @@ import (
    "iter"
 )
 
-func (r ResponseBody) sessionKey() []byte {
-   field, _ := r[0].Field(4)
-   return field.Bytes
+func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
+   field, ok := k[0].Field(3) // bytes key
+   if !ok {
+      return nil, errors.New(".Field(3)")
+   }
+   cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(field.Bytes, field.Bytes)
+   return padding.NewPKCS7Padding(aes.BlockSize).Unpad(field.Bytes)
 }
+
+func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
+   session_key, err := rsa.DecryptOAEP(
+      sha1.New(), nil, c.private_key, body.sessionKey(), nil,
+   )
+   if err != nil {
+      return nil, err
+   }
+   var data []byte
+   data = append(data, 1)
+   data = append(data, "ENCRYPTION"...)
+   data = append(data, 0)
+   data = append(data, c.license_request...)
+   data = append(data, 0, 0, 0, 128) // size
+   block, err := aes.NewCipher(session_key)
+   if err != nil {
+      return nil, err
+   }
+   return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
+}
+
+type KeyContainer [1]protobuf.Message
 
 func (r ResponseBody) Container() iter.Seq[KeyContainer] {
    return func(yield func(KeyContainer) bool) {
@@ -33,6 +59,11 @@ func (r ResponseBody) Container() iter.Seq[KeyContainer] {
          }
       }
    }
+}
+
+func (r ResponseBody) sessionKey() []byte {
+   field, _ := r[0].Field(4)
+   return field.Bytes
 }
 
 type Cdm struct {
@@ -91,15 +122,6 @@ func (c *Cdm) New(private_key, client_id, psshData []byte) error {
    return nil
 }
 
-func (k KeyContainer) Key(block cipher.Block) ([]byte, error) {
-   field, ok := k[0].Field(3) // bytes key
-   if !ok {
-      return nil, errors.New(".Field(3)")
-   }
-   cipher.NewCBCDecrypter(block, k.iv()).CryptBlocks(field.Bytes, field.Bytes)
-   return padding.NewPKCS7Padding(aes.BlockSize).Unpad(field.Bytes)
-}
-
 func (k KeyContainer) iv() []byte {
    field, _ := k[0].Field(2)
    return field.Bytes
@@ -142,25 +164,3 @@ func (fill) Read(data []byte) (int, error) {
 }
 
 type fill struct{}
-
-func (c *Cdm) Block(body ResponseBody) (cipher.Block, error) {
-   session_key, err := rsa.DecryptOAEP(
-      sha1.New(), nil, c.private_key, body.sessionKey(), nil,
-   )
-   if err != nil {
-      return nil, err
-   }
-   var data []byte
-   data = append(data, 1)
-   data = append(data, "ENCRYPTION"...)
-   data = append(data, 0)
-   data = append(data, c.license_request...)
-   data = append(data, 0, 0, 0, 128) // size
-   block, err := aes.NewCipher(session_key)
-   if err != nil {
-      return nil, err
-   }
-   return aes.NewCipher(cbcmac.NewCMAC(block, aes.BlockSize).MAC(data))
-}
-
-type KeyContainer [1]protobuf.Message

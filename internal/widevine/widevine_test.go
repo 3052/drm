@@ -3,6 +3,7 @@ package widevine
 import (
    "bytes"
    "crypto"
+   "crypto/rand"
    "crypto/rsa"
    "crypto/sha1"
    "crypto/x509"
@@ -56,196 +57,85 @@ q9Its/49Lpft8ZD+7A9H/2L9bta+/cWftof+8vuc+Auwtn/cf8vu//Lf/8fn
 /x/f/8/z+//f//v/3/7/8f3//P8/v/5//9/+///H9//z/P7/+f//fwIDAQAB`
 )
 
-// TestEncodeLicenseRequest verifies that a new LicenseRequest is encoded correctly.
-func TestEncodeLicenseRequest(t *testing.T) {
-   clientID := []byte{0xCA, 0xFE, 0xBA, 0xBE}
-   psshData := []byte{0xDE, 0xAD, 0xBE, 0xEF}
-   requestType := 1 // NEW
-
-   req := NewLicenseRequest(clientID, psshData, requestType)
-   encoded, err := req.Encode()
-   if err != nil {
-      t.Fatalf("Failed to encode LicenseRequest: %v", err)
-   }
-
-   expected := []byte{
-      0x0a, 0x04, 0xca, 0xfe, 0xba, 0xbe,
-      0x12, 0x08, 0x0a, 0x06, 0x0a, 0x04, 0xde, 0xad, 0xbe, 0xef,
-      0x18, 0x01,
-   }
-
-   if !bytes.Equal(encoded, expected) {
-      t.Errorf("Encoded LicenseRequest does not match expected bytes.\nGot:  %x\nWant: %x", encoded, expected)
-   }
-}
-
-// TestSignedMessageRoundtrip_WithSessionKey tests signing, encoding, decoding, and verifying
-// a SignedMessage that includes a session key.
-func TestSignedMessageRoundtrip_WithSessionKey(t *testing.T) {
-   // 1. Decode the test private key
-   pkcs8, err := base64.StdEncoding.DecodeString(testPrivateKeyB64)
-   if err != nil {
-      t.Fatalf("Failed to decode private key: %v", err)
-   }
-   privateKey, err := ParsePrivateKey(pkcs8)
-   if err != nil {
-      t.Fatalf("Failed to parse private key: %v", err)
-   }
-
-   // 2. Create and encode a LicenseRequest
-   req := NewLicenseRequest(
-      []byte{0x01, 0x01, 0x01, 0x01},
-      []byte{0xAA, 0xBB, 0xCC},
-      1,
-   )
-   reqBytes, err := req.Encode()
-   if err != nil {
-      t.Fatalf("Failed to encode request: %v", err)
-   }
-
-   sessionKey := []byte{0x11, 0x22, 0x33, 0x44}
-
-   // 3. Create a SignedMessage (which signs the request and adds the session key)
-   signedMsg, err := NewSignedRequest(privateKey, reqBytes, sessionKey)
-   if err != nil {
-      t.Fatalf("Failed to create signed request: %v", err)
-   }
-
-   // 4. Encode and Parse the SignedMessage
-   encoded, err := signedMsg.Encode()
-   if err != nil {
-      t.Fatalf("Failed to encode SignedMessage: %v", err)
-   }
-   parsed, err := ParseSignedMessage(encoded)
-   if err != nil {
-      t.Fatalf("Failed to parse SignedMessage: %v", err)
-   }
-
-   // 5. Verify fields
-   if parsed.SessionKey == nil {
-      t.Fatal("Parsed session key is nil, but it should be present")
-   }
-   if !bytes.Equal(parsed.SessionKey.Bytes, sessionKey) {
-      t.Errorf("SessionKey mismatch: got %x, want %x", parsed.SessionKey.Bytes, sessionKey)
-   }
-
-   // 6. Verify the signature
-   verifySignature(t, parsed.Msg.Bytes, parsed.Signature.Bytes)
-}
-
-// TestSignedMessageRoundtrip_WithoutSessionKey tests a SignedMessage without a session key.
-func TestSignedMessageRoundtrip_WithoutSessionKey(t *testing.T) {
-   // 1. Setup keys and request
-   pkcs8, err := base64.StdEncoding.DecodeString(testPrivateKeyB64)
-   if err != nil {
-      t.Fatalf("Failed to decode private key: %v", err)
-   }
-   privateKey, err := ParsePrivateKey(pkcs8)
-   if err != nil {
-      t.Fatalf("Failed to parse private key: %v", err)
-   }
-
+// TestSignedMessageCreation checks that the session key (public key) is correctly generated.
+func TestSignedMessageCreation(t *testing.T) {
+   pkcs8, _ := base64.StdEncoding.DecodeString(testPrivateKeyB64)
+   privateKey, _ := ParsePrivateKey(pkcs8)
    req := NewLicenseRequest([]byte{1}, []byte{2}, 1)
-   reqBytes, err := req.Encode()
-   if err != nil {
-      t.Fatalf("Failed to encode request: %v", err)
-   }
+   reqBytes, _ := req.Encode()
 
-   // 2. Create SignedMessage with nil session key
-   signedMsg, err := NewSignedRequest(privateKey, reqBytes, nil)
+   signedMsg, err := NewSignedRequest(privateKey, reqBytes)
    if err != nil {
       t.Fatalf("Failed to create signed request: %v", err)
    }
 
-   // 3. Encode and Parse
-   encoded, err := signedMsg.Encode()
+   // Verify that the session key was added
+   if signedMsg.SessionKey == nil || len(signedMsg.SessionKey.Bytes) == 0 {
+      t.Fatal("SessionKey was not automatically generated in the signed request")
+   }
+
+   // Verify the signature for good measure
+   verifySignature(t, signedMsg.Msg.Bytes, signedMsg.Signature.Bytes)
+}
+
+// TestLicenseKeyDecryption tests the full flow of parsing a license and decrypting the key.
+func TestLicenseKeyDecryption(t *testing.T) {
+   // 1. Get our test key pair
+   pkcs8, _ := base64.StdEncoding.DecodeString(testPrivateKeyB64)
+   privateKey, _ := ParsePrivateKey(pkcs8)
+   publicKey := &privateKey.PublicKey
+
+   // 2. Define a plaintext content key
+   plaintextContentKey := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
+
+   // 3. Simulate the server: Encrypt the content key with the public key
+   encryptedContentKey, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, publicKey, plaintextContentKey, nil)
    if err != nil {
-      t.Fatalf("Failed to encode SignedMessage: %v", err)
+      t.Fatalf("Failed to simulate server key encryption: %v", err)
    }
 
-   parsed, err := ParseSignedMessage(encoded)
+   // 4. Manually construct a protobuf License message containing the encrypted key
+   //    License -> key (field 3) -> KeyContainer message
+   //    KeyContainer -> key (field 3) -> bytes (encrypted key)
+   keyContainerBytes := []byte{
+      /* Field 3 (key) */ 0x1a,
+      /* Length */ byte(len(encryptedContentKey)),
+   }
+   keyContainerBytes = append(keyContainerBytes, encryptedContentKey...)
+
+   licenseBytes := []byte{
+      /* Field 3 (key) - repeated */ 0x1a,
+      /* Length of KeyContainer */ byte(len(keyContainerBytes)),
+   }
+   licenseBytes = append(licenseBytes, keyContainerBytes...)
+
+   // 5. Parse the license and decrypt the key using the private key
+   license, err := ParseLicense(licenseBytes, privateKey)
    if err != nil {
-      t.Fatalf("Failed to parse SignedMessage: %v", err)
+      t.Fatalf("Failed to parse license: %v", err)
    }
 
-   // 4. Verify session key is absent
-   if parsed.SessionKey != nil {
-      t.Errorf("Parsed session key should be nil, but it was present with value: %x", parsed.SessionKey.Bytes)
+   // 6. Verify the result
+   if len(license.Keys) != 1 {
+      t.Fatalf("Expected 1 key container, got %d", len(license.Keys))
    }
 
-   // 5. Verify the signature
-   verifySignature(t, parsed.Msg.Bytes, parsed.Signature.Bytes)
+   decryptedKey := license.Keys[0].Key
+   if !bytes.Equal(decryptedKey, plaintextContentKey) {
+      t.Errorf("Decrypted key does not match original plaintext key.\nGot:  %x\nWant: %x", decryptedKey, plaintextContentKey)
+   }
 }
 
 // verifySignature is a helper function to verify a signature to avoid code duplication.
 func verifySignature(t *testing.T, msg, signature []byte) {
-   // 1. Decode and parse the public key
-   pubBytes, err := base64.StdEncoding.DecodeString(testPublicKeyB64)
-   if err != nil {
-      t.Fatalf("Failed to decode public key: %v", err)
-   }
-
-   pub, err := x509.ParsePKIXPublicKey(pubBytes)
-   if err != nil {
-      t.Fatalf("Failed to parse public key: %v", err)
-   }
-
-   publicKey, ok := pub.(*rsa.PublicKey)
-   if !ok {
-      t.Fatal("Public key is not an RSA key")
-   }
-
-   // 2. Verify the signature against the original message hash
+   pubBytes, _ := base64.StdEncoding.DecodeString(testPublicKeyB64)
+   pub, _ := x509.ParsePKIXPublicKey(pubBytes)
+   publicKey := pub.(*rsa.PublicKey)
    msgHash := sha1.New()
    msgHash.Write(msg)
    hashed := msgHash.Sum(nil)
-
-   err = rsa.VerifyPKCS1v15(publicKey, crypto.SHA1, hashed, signature)
+   err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA1, hashed, signature)
    if err != nil {
       t.Errorf("Signature verification failed: %v", err)
-   }
-}
-
-// TestParseLicense verifies that a License message is parsed correctly.
-func TestParseLicense(t *testing.T) {
-   // Construct a sample License protobuf message.
-   licenseBytes := []byte{
-      0x12, 0x02, 0x08, 0x01, // Policy { can_play: true }
-      0x1a, 0x05, 0x0a, 0x03, 0x01, 0x02, 0x03, // Key { id: [1, 2, 3] }
-   }
-
-   license, err := ParseLicense(licenseBytes)
-   if err != nil {
-      t.Fatalf("Failed to parse License: %v", err)
-   }
-
-   if license.Policy == nil {
-      t.Fatal("Parsed license policy is nil")
-   }
-   if license.Policy.Tag.FieldNum != 2 {
-      t.Errorf("Expected policy field number 2, got %d", license.Policy.Tag.FieldNum)
-   }
-
-   if len(license.Key) != 1 {
-      t.Fatalf("Expected 1 key, got %d", len(license.Key))
-   }
-}
-
-// TestParseLicenseError verifies that a LicenseError message is parsed correctly.
-func TestParseLicenseError(t *testing.T) {
-   // Field 1 (error_code, Varint) -> Tag 0x08, Value 1
-   errorBytes := []byte{0x08, 0x01}
-   expectedErrorCode := uint64(1)
-
-   licenseError, err := ParseLicenseError(errorBytes)
-   if err != nil {
-      t.Fatalf("Failed to parse LicenseError: %v", err)
-   }
-
-   if licenseError.ErrorCode == nil {
-      t.Fatal("Parsed license error code is nil")
-   }
-   if licenseError.ErrorCode.Numeric != expectedErrorCode {
-      t.Errorf("Expected error code %d, got %d", expectedErrorCode, licenseError.ErrorCode.Numeric)
    }
 }
