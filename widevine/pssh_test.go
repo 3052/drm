@@ -11,7 +11,7 @@ func TestWidevinePsshData_Encode_OnlyKeyIDs(t *testing.T) {
       {0x01, 0x02, 0x03, 0x04},
       {0x05, 0x06, 0x07, 0x08},
    }
-   pssh := NewWidevinePsshData(keyIDs, nil)
+   pssh := &WidevinePsshData{KeyIDs: keyIDs}
 
    encoded, err := pssh.Encode()
    if err != nil {
@@ -34,7 +34,7 @@ func TestWidevinePsshData_Encode_OnlyKeyIDs(t *testing.T) {
 // TestWidevinePsshData_Encode_OnlyContentID verifies encoding with only a content ID.
 func TestWidevinePsshData_Encode_OnlyContentID(t *testing.T) {
    contentID := []byte{0xDE, 0xAD, 0xBE, 0xEF}
-   pssh := NewWidevinePsshData(nil, contentID)
+   pssh := &WidevinePsshData{ContentID: contentID}
 
    encoded, err := pssh.Encode()
    if err != nil {
@@ -58,7 +58,7 @@ func TestWidevinePsshData_Encode_Both(t *testing.T) {
       {0xAA, 0xBB, 0xCC},
    }
    contentID := []byte("content_name")
-   pssh := NewWidevinePsshData(keyIDs, contentID)
+   pssh := &WidevinePsshData{KeyIDs: keyIDs, ContentID: contentID}
 
    encoded, err := pssh.Encode()
    if err != nil {
@@ -80,7 +80,7 @@ func TestWidevinePsshData_Encode_Both(t *testing.T) {
 
 // TestWidevinePsshData_Encode_Empty verifies that an empty struct encodes to an empty byte slice.
 func TestWidevinePsshData_Encode_Empty(t *testing.T) {
-   pssh := NewWidevinePsshData(nil, nil)
+   pssh := &WidevinePsshData{}
    encoded, err := pssh.Encode()
    if err != nil {
       t.Fatalf("Encode failed: %v", err)

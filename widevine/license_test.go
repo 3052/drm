@@ -10,9 +10,15 @@ import (
 )
 
 func TestLicense(t *testing.T) {
-   client_id, err := os.ReadFile(
-      `C:\Users\Steven\AppData\Local\L3\client_id.bin`,
-   )
+   cache, err := os.UserCacheDir()
+   if err != nil {
+      t.Fatal(err)
+   }
+   client_id, err := os.ReadFile(cache + "/L3/client_id.bin")
+   if err != nil {
+      t.Fatal(err)
+   }
+   pemBytes, err := os.ReadFile(cache + "/L3/private_key.pem")
    if err != nil {
       t.Fatal(err)
    }
@@ -22,14 +28,7 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   req := NewLicenseRequest(client_id, psshBytes, 1)
-   reqBytes, err := req.Encode()
-   if err != nil {
-      t.Fatal(err)
-   }
-   pemBytes, err := os.ReadFile(
-      `C:\Users\Steven\AppData\Local\L3\private_key.pem`,
-   )
+   reqBytes, err := NewLicenseRequest(client_id, psshBytes, 1).Encode()
    if err != nil {
       t.Fatal(err)
    }
@@ -37,14 +36,13 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   signedMsg, err := NewSignedRequest(privateKey, reqBytes)
+   signedMsg, err := NewSignedRequest(reqBytes, privateKey)
    if err != nil {
       t.Fatalf("Failed to create signed request: %v", err)
    }
-   if signedMsg.SessionKey == nil || len(signedMsg.SessionKey.Bytes) == 0 {
-      t.Fatal("SessionKey was not automatically generated in the signed request")
-   }
-   verifySignature(t, &privateKey.PublicKey, signedMsg.Msg.Bytes, signedMsg.Signature.Bytes)
+   verifySignature(
+      t, &privateKey.PublicKey, signedMsg.Msg.Bytes, signedMsg.Signature.Bytes,
+   )
    signedBytes, err := signedMsg.Encode()
    if err != nil {
       t.Fatal(err)

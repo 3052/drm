@@ -3,10 +3,8 @@ package widevine
 import (
    "41.neocities.org/protobuf"
    "bytes"
-   "crypto/rand"
    "crypto/rsa"
    "crypto/sha1"
-   "crypto/x509"
    "fmt"
 )
 
@@ -42,20 +40,15 @@ func (pr *ParsedResponse) GetKey(id []byte) ([]byte, bool) {
 
 // NewSignedRequest creates a new SignedMessage for a license request.
 // It signs the request message and automatically generates the session_key.
-func NewSignedRequest(privateKey *rsa.PrivateKey, msg []byte) (*SignedMessage, error) {
+func NewSignedRequest(msg []byte, privateKey *rsa.PrivateKey) (*SignedMessage, error) {
    signature, err := signMessage(privateKey, msg)
    if err != nil {
       return nil, err
    }
-   publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-   if err != nil {
-      return nil, fmt.Errorf("failed to marshal public key for session key: %w", err)
-   }
    sm := &SignedMessage{
-      Type:       protobuf.NewVarint(1, 1), // MessageType LICENSE_REQUEST = 1
-      Msg:        protobuf.NewBytes(2, msg),
-      Signature:  protobuf.NewBytes(3, signature),
-      SessionKey: protobuf.NewBytes(4, publicKeyBytes),
+      Type:      protobuf.Varint(1, 1), // MessageType LICENSE_REQUEST = 1
+      Msg:       protobuf.Bytes(2, msg),
+      Signature: protobuf.Bytes(3, signature),
    }
    return sm, nil
 }
@@ -95,7 +88,8 @@ func ParseLicenseResponse(responseData []byte, originalRequestBytes []byte, priv
       if !found {
          return nil, fmt.Errorf("license response is missing the session_key")
       }
-      decryptedSessionKey, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, sessionKeyField.Bytes, nil)
+      // Decrypt the session key, passing nil for the random reader.
+      decryptedSessionKey, err := rsa.DecryptOAEP(sha1.New(), nil, privateKey, sessionKeyField.Bytes, nil)
       if err != nil {
          return nil, fmt.Errorf("failed to decrypt response session key: %w", err)
       }

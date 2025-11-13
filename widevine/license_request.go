@@ -1,8 +1,6 @@
 package widevine
 
-import (
-   "41.neocities.org/protobuf"
-)
+import "41.neocities.org/protobuf"
 
 // LicenseRequest reflects the structure of the Widevine LicenseRequest protobuf.
 type LicenseRequest struct {
@@ -17,14 +15,14 @@ func NewLicenseRequest(clientID []byte, psshData []byte, requestType int) *Licen
    // For a minimal implementation, we create a ContentIdentification message
    // where the widevine_pssh_data field is populated.
    // The provided psshData is used for the nested pssh_data field.
-   psshDataField := protobuf.NewBytes(1, psshData)
-   widevinePsshData := protobuf.NewMessage(1, psshDataField)
-   contentIdentification := protobuf.NewMessage(2, widevinePsshData)
+   psshDataField := protobuf.Bytes(1, psshData)
+   widevinePsshData := protobuf.Embed(1, psshDataField)
+   contentIdentification := protobuf.Embed(2, widevinePsshData)
 
    return &LicenseRequest{
-      ClientID:  protobuf.NewBytes(1, clientID),
+      ClientID:  protobuf.Bytes(1, clientID),
       ContentID: contentIdentification,
-      Type:      protobuf.NewVarint(3, uint64(requestType)),
+      Type:      protobuf.Varint(3, uint64(requestType)),
    }
 }
 

@@ -6,8 +6,6 @@ import (
    "crypto/cipher"
    "encoding/binary"
    "errors"
-   "fmt"
-
    "github.com/emmansun/gmsm/cbcmac"
    "github.com/emmansun/gmsm/padding"
 )
@@ -31,7 +29,7 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
    // Step 1: Create an initial cipher from the decrypted session key.
    cmacCipher, err := aes.NewCipher(decryptedSessionKey)
    if err != nil {
-      return nil, fmt.Errorf("failed to create AES cipher from session key: %w", err)
+      return nil, err
    }
 
    // Step 2: Build the KDF input.
@@ -51,7 +49,7 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
    // Step 4: Create the final AES cipher from the derived key.
    contentKeyCipher, err := aes.NewCipher(derivedKey)
    if err != nil {
-      return nil, fmt.Errorf("failed to create AES cipher from derived key: %w", err)
+      return nil, err
    }
 
    var keys []*KeyContainer
@@ -91,7 +89,7 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
          pkcs7 := padding.NewPKCS7Padding(aes.BlockSize)
          unpaddedKey, err := pkcs7.Unpad(decryptedPaddedKey)
          if err != nil {
-            return nil, fmt.Errorf("failed to unpad decrypted key: %w", err)
+            return nil, err
          }
          kc.Key = unpaddedKey
       }

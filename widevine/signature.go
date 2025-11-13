@@ -2,7 +2,6 @@ package widevine
 
 import (
    "crypto"
-   "crypto/rand"
    "crypto/rsa"
    "crypto/sha1"
    "crypto/x509"
@@ -10,6 +9,17 @@ import (
    "errors"
    "fmt"
 )
+
+// noopReader is a deterministic implementation of io.Reader that performs
+// no operations on the provided buffer. It leaves the buffer as-is (which
+// is typically zero-initialized by the caller) and returns its length.
+type noopReader struct{}
+
+// Read does not modify the input slice and returns its length, satisfying
+// the io.Reader interface for deterministic PSS signing.
+func (noopReader) Read(p []byte) (n int, err error) {
+   return len(p), nil
+}
 
 // ParsePrivateKey parses a PEM-encoded private key from a byte slice.
 // It supports both PKCS#8 ("PRIVATE KEY") and PKCS#1 ("RSA PRIVATE KEY") formats.
@@ -53,8 +63,8 @@ func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
       Hash:       crypto.SHA1,
    }
 
-   // 3. Sign the hash using the RSASSA-PSS scheme.
-   signature, err := rsa.SignPSS(rand.Reader, privateKey, crypto.SHA1, hashed, opts)
+   // 3. Sign the hash using the RSASSA-PSS scheme with a deterministic no-op reader.
+   signature, err := rsa.SignPSS(noopReader{}, privateKey, crypto.SHA1, hashed, opts)
    if err != nil {
       return nil, fmt.Errorf("failed to sign message with PSS: %w", err)
    }

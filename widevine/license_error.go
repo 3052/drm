@@ -1,8 +1,6 @@
 package widevine
 
-import (
-   "41.neocities.org/protobuf"
-)
+import "41.neocities.org/protobuf"
 
 // LicenseError reflects the structure of the Widevine LicenseError protobuf.
 type LicenseError struct {
