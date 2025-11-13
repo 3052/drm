@@ -9,7 +9,7 @@ import (
 type KeyContainer struct {
    ID  []byte
    IV  []byte
-   Key []byte // This will hold the DECRYPTED key.
+   Key []byte // This holds the DECRYPTED key.
 }
 
 // License reflects the structure of the Widevine License protobuf.
@@ -18,14 +18,9 @@ type License struct {
    Keys   []*KeyContainer
 }
 
-// ParseLicense deserializes a License from the protobuf wire format and decrypts
-// the content keys using the provided private key.
-func ParseLicense(data []byte, privateKey *rsa.PrivateKey) (*License, error) {
-   var message protobuf.Message
-   if err := message.Parse(data); err != nil {
-      return nil, err
-   }
-
+// decodeLicenseFromMessage constructs a License struct from a pre-parsed protobuf message
+// and decrypts the content keys using the provided private key.
+func decodeLicenseFromMessage(message protobuf.Message, privateKey *rsa.PrivateKey) (*License, error) {
    policy, _ := message.Field(2)
 
    var keys []*KeyContainer
@@ -37,27 +32,21 @@ func ParseLicense(data []byte, privateKey *rsa.PrivateKey) (*License, error) {
       }
 
       kc := &KeyContainer{}
+      embeddedKeyContainer := keyField.Message
 
-      // Field 1: id
-      if idField, found := keyField.Message.Field(1); found {
+      if idField, found := embeddedKeyContainer.Field(1); found {
          kc.ID = idField.Bytes
       }
-
-      // Field 2: iv
-      if ivField, found := keyField.Message.Field(2); found {
+      if ivField, found := embeddedKeyContainer.Field(2); found {
          kc.IV = ivField.Bytes
       }
-
-      // Field 3: key (This is the encrypted content key)
-      if keyDataField, found := keyField.Message.Field(3); found {
+      if keyDataField, found := embeddedKeyContainer.Field(3); found {
          decryptedKey, err := decryptKey(privateKey, keyDataField.Bytes)
          if err == nil {
             kc.Key = decryptedKey
          }
-         // If decryption fails, kc.Key will remain nil.
-         // You could add more robust error handling here if needed.
+         // Silently fail on decryption error, key will be nil.
       }
-
       keys = append(keys, kc)
    }
 

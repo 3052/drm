@@ -9,13 +9,8 @@ type LicenseError struct {
    ErrorCode *protobuf.Field
 }
 
-// ParseLicenseError deserializes a LicenseError from the protobuf wire format.
-func ParseLicenseError(data []byte) (*LicenseError, error) {
-   var message protobuf.Message
-   if err := message.Parse(data); err != nil {
-      return nil, err
-   }
-
+// decodeErrorFromMessage constructs a LicenseError struct from a pre-parsed protobuf message.
+func decodeErrorFromMessage(message protobuf.Message) (*LicenseError, error) {
    errorCode, _ := message.Field(1)
 
    return &LicenseError{
