@@ -36,6 +36,56 @@ func loadTestKey(t *testing.T) *rsa.PrivateKey {
    return privateKey
 }
 
+func TestParsedResponse_GetKey(t *testing.T) {
+   // 1. Create a dummy response with multiple keys
+   id1 := []byte{0x01, 0x01, 0x01, 0x01}
+   key1 := []byte{0xAA, 0xAA, 0xAA, 0xAA}
+   id2 := []byte{0x02, 0x02, 0x02, 0x02}
+   key2 := []byte{0xBB, 0xBB, 0xBB, 0xBB}
+   nonexistentID := []byte{0xFF, 0xFF, 0xFF, 0xFF}
+
+   response := &ParsedResponse{
+      Keys: []*KeyContainer{
+         {ID: id1, Key: key1},
+         {ID: id2, Key: key2},
+      },
+   }
+
+   // 2. Test finding an existing key
+   foundKey, ok := response.GetKey(id2)
+   if !ok {
+      t.Fatal("Expected to find key with id2, but did not")
+   }
+   if !bytes.Equal(foundKey, key2) {
+      t.Errorf("Returned key for id2 is incorrect. Got %x, want %x", foundKey, key2)
+   }
+
+   // 3. Test finding another existing key
+   foundKey, ok = response.GetKey(id1)
+   if !ok {
+      t.Fatal("Expected to find key with id1, but did not")
+   }
+   if !bytes.Equal(foundKey, key1) {
+      t.Errorf("Returned key for id1 is incorrect. Got %x, want %x", foundKey, key1)
+   }
+
+   // 4. Test searching for a key that does not exist
+   foundKey, ok = response.GetKey(nonexistentID)
+   if ok {
+      t.Error("Expected not to find a key, but did")
+   }
+   if foundKey != nil {
+      t.Errorf("Expected nil key for nonexistent ID, but got %x", foundKey)
+   }
+
+   // 5. Test on a response with no keys
+   emptyResponse := &ParsedResponse{Keys: nil}
+   _, ok = emptyResponse.GetKey(id1)
+   if ok {
+      t.Error("Expected not to find a key in an empty response, but did")
+   }
+}
+
 // TestParseLicenseResponse_EndToEndDecryption tests the full decryption flow.
 func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
    privateKey := loadTestKey(t)
@@ -47,17 +97,11 @@ func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
    dummyOriginalRequest := []byte{0xAA, 0xBB, 0xCC}
 
    // == Step 2: Simulate Server-Side Logic ==
-   // The server receives our public key and generates a session key.
    sessionKey := make([]byte, 16) // AES-128
    rand.Read(sessionKey)
-
-   // Server encrypts the session key with our public key. This goes into the response.
    encryptedSessionKey, _ := rsa.EncryptOAEP(sha1.New(), rand.Reader, publicKey, sessionKey, nil)
-
-   // Server derives the same content wrapping key using the KDF.
    cmacCipher, _ := aes.NewCipher(sessionKey)
 
-   // Server builds the KDF input.
    var kdfInput []byte
    kdfInput = append(kdfInput, 0x01)
    kdfInput = append(kdfInput, []byte(kWrappingKeyLabel)...)
@@ -70,7 +114,6 @@ func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
    cmac := cbcmac.NewCMAC(cmacCipher, 16)
    derivedKey := cmac.MAC(kdfInput)
 
-   // Server uses the derived key to encrypt the plaintext content key with AES-CBC.
    contentCipher, _ := aes.NewCipher(derivedKey)
    pkcs7 := padding.NewPKCS7Padding(aes.BlockSize)
    paddedKey := pkcs7.Pad(plaintextContentKey)
@@ -80,8 +123,8 @@ func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
 
    // == Step 3: Build the Protobuf Response ==
    keyContainerMessage := protobuf.Message{
-      protobuf.NewBytes(2, contentKeyIV), // Field 2: iv
-      protobuf.NewBytes(3, encryptedKey), // Field 3: key (encrypted)
+      protobuf.NewBytes(2, contentKeyIV),
+      protobuf.NewBytes(3, encryptedKey),
    }
    keyContainerBytes, _ := keyContainerMessage.Encode()
    licenseMessage := protobuf.Message{protobuf.NewBytes(3, keyContainerBytes)}
@@ -102,16 +145,16 @@ func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
 
    // == Step 5: Verify the result ==
    if parsed.Error != nil {
-      t.Fatal("Expected a License, but got an Error")
+      t.Fatal("Expected Keys, but got an Error")
    }
-   if parsed.License == nil {
-      t.Fatal("Expected a License, but got nil")
+   if parsed.Keys == nil {
+      t.Fatal("Expected Keys, but got nil")
    }
-   if len(parsed.License.Keys) != 1 {
-      t.Fatalf("Expected 1 key, got %d", len(parsed.License.Keys))
+   if len(parsed.Keys) != 1 {
+      t.Fatalf("Expected 1 key, got %d", len(parsed.Keys))
    }
-   if !bytes.Equal(parsed.License.Keys[0].Key, plaintextContentKey) {
-      t.Errorf("Decrypted key mismatch!\nGot:  %x\nWant: %x", parsed.License.Keys[0].Key, plaintextContentKey)
+   if !bytes.Equal(parsed.Keys[0].Key, plaintextContentKey) {
+      t.Errorf("Decrypted key mismatch!\nGot:  %x\nWant: %x", parsed.Keys[0].Key, plaintextContentKey)
    }
 }
 
@@ -119,7 +162,6 @@ func TestParseLicenseResponse_EndToEndDecryption(t *testing.T) {
 func TestParseLicenseResponse_Error(t *testing.T) {
    privateKey := loadTestKey(t)
    expectedCode := uint64(1)
-
    dummyOriginalRequest := []byte{0xAA, 0xBB, 0xCC}
 
    errorMsg := protobuf.Message{protobuf.NewVarint(1, expectedCode)}
@@ -137,8 +179,8 @@ func TestParseLicenseResponse_Error(t *testing.T) {
       t.Fatalf("ParseLicenseResponse failed: %v", err)
    }
 
-   if parsed.License != nil {
-      t.Fatal("Expected an Error, but got a License")
+   if parsed.Keys != nil {
+      t.Fatal("Expected an Error, but got Keys")
    }
    if parsed.Error == nil {
       t.Fatal("Expected an Error, but got nil")

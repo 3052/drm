@@ -19,21 +19,15 @@ type KeyContainer struct {
    Key []byte // This now holds the fully DECRYPTED key.
 }
 
-// License reflects the structure of the Widevine License protobuf.
-type License struct {
-   Policy *protobuf.Field
-   Keys   []*KeyContainer
-}
-
 // Constants used for the key derivation function (KDF).
 const (
    kWrappingKeyLabel    = "ENCRYPTION"
    kWrappingKeySizeBits = 128
 )
 
-// decodeLicenseFromMessage constructs a License struct from a pre-parsed protobuf message
+// decodeLicenseFromMessage constructs a slice of KeyContainers from a pre-parsed protobuf message
 // and completes the full key decryption process.
-func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []byte, originalRequestBytes []byte) (*License, error) {
+func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []byte, originalRequestBytes []byte) ([]*KeyContainer, error) {
    // Step 1: Create an initial cipher from the decrypted session key.
    cmacCipher, err := aes.NewCipher(decryptedSessionKey)
    if err != nil {
@@ -60,7 +54,6 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
       return nil, fmt.Errorf("failed to create AES cipher from derived key: %w", err)
    }
 
-   policy, _ := message.Field(2)
    var keys []*KeyContainer
    it := message.Iterator(3) // Iterator for field number 3 (key container)
    for it.Next() {
@@ -105,8 +98,5 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
       keys = append(keys, kc)
    }
 
-   return &License{
-      Policy: policy,
-      Keys:   keys,
-   }, nil
+   return keys, nil
 }

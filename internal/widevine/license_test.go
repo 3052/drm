@@ -2,8 +2,7 @@ package widevine
 
 import (
    "bytes"
-   "encoding/base64"
-   "fmt"
+   "encoding/hex"
    "io"
    "net/http"
    "os"
@@ -11,36 +10,14 @@ import (
 )
 
 func TestLicense(t *testing.T) {
-   keyPath := `C:\Users\Steven\AppData\Local\L3\private_key.pem`
-   pemBytes, err := os.ReadFile(keyPath)
-   if err != nil {
-      if os.IsNotExist(err) {
-         t.Fatalf("skipping test: test key file not found at %s", keyPath)
-      }
-      t.Fatalf("Failed to read private key file: %v", err)
-   }
-   privateKey, err := ParsePrivateKey(pemBytes)
-   if err != nil {
-      t.Fatalf("Failed to parse private key from %s: %v", keyPath, err)
-   }
    client_id, err := os.ReadFile(
       `C:\Users\Steven\AppData\Local\L3\client_id.bin`,
    )
    if err != nil {
       t.Fatal(err)
    }
-   content_id, err := base64.StdEncoding.DecodeString(ctv.content_id)
-   if err != nil {
-      t.Fatal(err)
-   }
-   key_id, err := base64.StdEncoding.DecodeString(ctv.key_id)
-   if err != nil {
-      t.Fatal(err)
-   }
-   pssh := WidevinePsshData{
-      ContentID: content_id,
-      KeyIDs:    [][]byte{key_id},
-   }
+   var pssh WidevinePsshData
+   pssh.ContentID = []byte(ctv.content_id)
    psshBytes, err := pssh.Encode()
    if err != nil {
       t.Fatal(err)
@@ -48,7 +25,17 @@ func TestLicense(t *testing.T) {
    req := NewLicenseRequest(client_id, psshBytes, 1)
    reqBytes, err := req.Encode()
    if err != nil {
-      t.Fatalf("Failed to encode request: %v", err)
+      t.Fatal(err)
+   }
+   pemBytes, err := os.ReadFile(
+      `C:\Users\Steven\AppData\Local\L3\private_key.pem`,
+   )
+   if err != nil {
+      t.Fatal(err)
+   }
+   privateKey, err := ParsePrivateKey(pemBytes)
+   if err != nil {
+      t.Fatal(err)
    }
    signedMsg, err := NewSignedRequest(privateKey, reqBytes)
    if err != nil {
@@ -75,19 +62,33 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   for _, key := range parsed.License.Keys {
-      fmt.Printf("%+v\n", key)
+   key_id, err := hex.DecodeString(ctv.key_id)
+   if err != nil {
+      t.Fatal(err)
+   }
+   key, err := hex.DecodeString(ctv.key)
+   if err != nil {
+      t.Fatal(err)
+   }
+   key1, ok := parsed.GetKey(key_id)
+   if !ok {
+      t.Fatal("GetKey")
+   }
+   if !bytes.Equal(key1, key) {
+      t.Fatal("!bytes.Equal")
    }
 }
 
 var ctv = struct {
    content_id  string
+   key         string
    key_id      string
    url_ctv     string
    url_license string
 }{
-   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
-   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
-   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
+   content_id:  "ff-e58adb7f-1383420",
+   key:         "7a480828e337e2f7b046fddce0fd5d17",
+   key_id:      "e9f3053c404e531a4794dc41ca305457",
+   url_ctv:     "https://ctv.ca/movies/the-hurt-locker",
    url_license: "https://license.9c9media.ca/widevine",
 }

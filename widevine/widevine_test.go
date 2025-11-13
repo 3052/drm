@@ -2,7 +2,7 @@ package widevine
 
 import (
    "bytes"
-   "encoding/base64"
+   "encoding/hex"
    "io"
    "net/http"
    "os"
@@ -16,18 +16,14 @@ var ctv = struct {
    url_ctv     string
    url_license string
 }{
-   content_id:  "ZmYtOGYyNjEzYWUtNTIxNTAx",
-   key:         "xQ87t+z5cLOVgxDdSgHyoA==",
-   key_id:      "A98dtspZsb9/z++3IHp0Dw==",
-   url_ctv:     "ctv.ca/movies/fools-rush-in-57470",
+   content_id:  "ff-e58adb7f-1383420",
+   key:         "7a480828e337e2f7b046fddce0fd5d17",
+   key_id:      "e9f3053c404e531a4794dc41ca305457",
+   url_ctv:     "https://ctv.ca/movies/the-hurt-locker",
    url_license: "https://license.9c9media.ca/widevine",
 }
 
 func TestCtv(t *testing.T) {
-   key, err := base64.StdEncoding.DecodeString(ctv.key)
-   if err != nil {
-      t.Fatal(err)
-   }
    cache, err := os.UserCacheDir()
    if err != nil {
       t.Fatal(err)
@@ -40,16 +36,8 @@ func TestCtv(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   key_id, err := base64.StdEncoding.DecodeString(ctv.key_id)
-   if err != nil {
-      t.Fatal(err)
-   }
    var psshValue Pssh
-   psshValue.KeyIds = [][]byte{key_id}
-   psshValue.ContentId, err = base64.StdEncoding.DecodeString(ctv.content_id)
-   if err != nil {
-      t.Fatal(err)
-   }
+   psshValue.ContentId = []byte(ctv.content_id)
    psshData, err := psshValue.Encode()
    if err != nil {
       t.Fatal(err)
@@ -81,6 +69,14 @@ func TestCtv(t *testing.T) {
       t.Fatal(err)
    }
    block, err := module.Block(body)
+   if err != nil {
+      t.Fatal(err)
+   }
+   key_id, err := hex.DecodeString(ctv.key_id)
+   if err != nil {
+      t.Fatal(err)
+   }
+   key, err := hex.DecodeString(ctv.key)
    if err != nil {
       t.Fatal(err)
    }

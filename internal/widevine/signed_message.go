@@ -2,6 +2,7 @@ package widevine
 
 import (
    "41.neocities.org/protobuf"
+   "bytes"
    "crypto/rand"
    "crypto/rsa"
    "crypto/sha1"
@@ -21,8 +22,22 @@ type SignedMessage struct {
 // ParsedResponse is a user-friendly struct that contains the decoded content
 // of a license server's response. Exactly one of the fields will be non-nil.
 type ParsedResponse struct {
-   License *License
-   Error   *LicenseError
+   Keys  []*KeyContainer
+   Error *LicenseError
+}
+
+// GetKey searches for a key by its ID in the license response.
+// It returns the key and true if found, otherwise it returns nil and false.
+func (pr *ParsedResponse) GetKey(id []byte) ([]byte, bool) {
+   if pr.Keys == nil {
+      return nil, false
+   }
+   for _, keyContainer := range pr.Keys {
+      if bytes.Equal(keyContainer.ID, id) {
+         return keyContainer.Key, true
+      }
+   }
+   return nil, false
 }
 
 // NewSignedRequest creates a new SignedMessage for a license request.
@@ -55,7 +70,7 @@ func (sm *SignedMessage) Encode() ([]byte, error) {
 }
 
 // ParseLicenseResponse is the single function needed to parse a response from the license server.
-// It now requires the original encoded LicenseRequest bytes to derive keys.
+// It now returns a slice of KeyContainers directly in the ParsedResponse.
 func ParseLicenseResponse(responseData []byte, originalRequestBytes []byte, privateKey *rsa.PrivateKey) (*ParsedResponse, error) {
    var topLevelMessage protobuf.Message
    if err := topLevelMessage.Parse(responseData); err != nil {
@@ -85,11 +100,11 @@ func ParseLicenseResponse(responseData []byte, originalRequestBytes []byte, priv
          return nil, fmt.Errorf("failed to decrypt response session key: %w", err)
       }
 
-      license, err := decodeLicenseFromMessage(embeddedMessage, decryptedSessionKey, originalRequestBytes)
+      keys, err := decodeLicenseFromMessage(embeddedMessage, decryptedSessionKey, originalRequestBytes)
       if err != nil {
          return nil, fmt.Errorf("failed to decode license message: %w", err)
       }
-      return &ParsedResponse{License: license}, nil
+      return &ParsedResponse{Keys: keys}, nil
 
    case 3: // MessageType ERROR_RESPONSE = 3
       msgField, found := topLevelMessage.Field(2)
