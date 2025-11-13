@@ -2,7 +2,9 @@ package widevine
 
 import (
    "41.neocities.org/protobuf"
+   "crypto/rand"
    "crypto/rsa"
+   "crypto/sha1"
    "crypto/x509"
    "fmt"
 )
@@ -53,37 +55,48 @@ func (sm *SignedMessage) Encode() ([]byte, error) {
 }
 
 // ParseLicenseResponse is the single function needed to parse a response from the license server.
-// It parses the message once and returns a struct containing either the deciphered License
-// or a LicenseError, avoiding wasteful re-parsing.
-func ParseLicenseResponse(data []byte, privateKey *rsa.PrivateKey) (*ParsedResponse, error) {
+// It now requires the original encoded LicenseRequest bytes to derive keys.
+func ParseLicenseResponse(responseData []byte, originalRequestBytes []byte, privateKey *rsa.PrivateKey) (*ParsedResponse, error) {
    var topLevelMessage protobuf.Message
-   if err := topLevelMessage.Parse(data); err != nil {
+   if err := topLevelMessage.Parse(responseData); err != nil {
       return nil, fmt.Errorf("failed to parse top-level SignedMessage: %w", err)
-   }
-
-   msgField, found := topLevelMessage.Field(2)
-   if !found || msgField.Message == nil {
-      return nil, fmt.Errorf("response is missing the main message payload")
    }
 
    typeField, _ := topLevelMessage.Field(1)
    if typeField == nil {
       return nil, fmt.Errorf("response is missing message type identifier")
    }
-
    msgType := typeField.Numeric
-   embeddedMessage := msgField.Message
 
    switch msgType {
    case 2: // MessageType LICENSE = 2
-      license, err := decodeLicenseFromMessage(embeddedMessage, privateKey)
+      msgField, found := topLevelMessage.Field(2)
+      if !found || msgField.Message == nil {
+         return nil, fmt.Errorf("license response is missing the main message payload")
+      }
+      embeddedMessage := msgField.Message
+
+      sessionKeyField, found := topLevelMessage.Field(4)
+      if !found {
+         return nil, fmt.Errorf("license response is missing the session_key")
+      }
+      decryptedSessionKey, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, sessionKeyField.Bytes, nil)
+      if err != nil {
+         return nil, fmt.Errorf("failed to decrypt response session key: %w", err)
+      }
+
+      license, err := decodeLicenseFromMessage(embeddedMessage, decryptedSessionKey, originalRequestBytes)
       if err != nil {
          return nil, fmt.Errorf("failed to decode license message: %w", err)
       }
       return &ParsedResponse{License: license}, nil
 
    case 3: // MessageType ERROR_RESPONSE = 3
-      licenseError, err := decodeErrorFromMessage(embeddedMessage)
+      msgField, found := topLevelMessage.Field(2)
+      if !found || msgField.Message == nil {
+         return nil, fmt.Errorf("error response is missing the main message payload")
+      }
+      licenseError, err := decodeErrorFromMessage(msgField.Message)
       if err != nil {
          return nil, fmt.Errorf("failed to decode error message: %w", err)
       }

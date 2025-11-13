@@ -40,16 +40,16 @@ func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 }
 
 // signMessage computes the SHA-1 hash of the message and signs it using the
-// RSASSA-PSS scheme as directed.
+// RSASSA-PSS scheme.
 func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
    // 1. Hash the message using SHA-1.
    hash := sha1.New()
    hash.Write(message)
    hashed := hash.Sum(nil)
 
-   // 2. Set PSS options with the specified SaltLength.
+   // 2. Set PSS options.
    opts := &rsa.PSSOptions{
-      SaltLength: rsa.PSSSaltLengthEqualsHash, // Corrected as per your instruction
+      SaltLength: rsa.PSSSaltLengthEqualsHash,
       Hash:       crypto.SHA1,
    }
 
@@ -59,9 +59,4 @@ func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
       return nil, fmt.Errorf("failed to sign message with PSS: %w", err)
    }
    return signature, nil
-}
-
-// decryptKey decrypts a content key using RSA-OAEP. This remains correct.
-func decryptKey(privateKey *rsa.PrivateKey, ciphertext []byte) ([]byte, error) {
-   return rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, ciphertext, nil)
 }

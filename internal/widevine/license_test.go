@@ -4,6 +4,7 @@ import (
    "bytes"
    "encoding/base64"
    "fmt"
+   "io"
    "net/http"
    "os"
    "testing"
@@ -65,12 +66,18 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   buffer := &bytes.Buffer{}
-   err = resp.Write(buffer)
+   defer resp.Body.Close()
+   signedBytes, err = io.ReadAll(resp.Body)
    if err != nil {
       t.Fatal(err)
    }
-   fmt.Printf("%q\n", buffer)
+   parsed, err := ParseLicenseResponse(signedBytes, reqBytes, privateKey)
+   if err != nil {
+      t.Fatal(err)
+   }
+   for _, key := range parsed.License.Keys {
+      fmt.Printf("%+v\n", key)
+   }
 }
 
 var ctv = struct {
