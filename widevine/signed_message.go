@@ -38,19 +38,17 @@ func (pr *ParsedResponse) GetKey(id []byte) ([]byte, bool) {
    return nil, false
 }
 
-// NewSignedRequest creates a new SignedMessage for a license request.
-// It signs the request message and automatically generates the session_key.
-func NewSignedRequest(msg []byte, privateKey *rsa.PrivateKey) (*SignedMessage, error) {
+// Build creates a new SignedMessage for a license request.
+// It signs the request message and populates the receiver.
+func (sm *SignedMessage) Build(msg []byte, privateKey *rsa.PrivateKey) error {
    signature, err := signMessage(privateKey, msg)
    if err != nil {
-      return nil, err
+      return err
    }
-   sm := &SignedMessage{
-      Type:      protobuf.Varint(1, 1), // MessageType LICENSE_REQUEST = 1
-      Msg:       protobuf.Bytes(2, msg),
-      Signature: protobuf.Bytes(3, signature),
-   }
-   return sm, nil
+   sm.Type = protobuf.Varint(1, 1) // MessageType LICENSE_REQUEST = 1
+   sm.Msg = protobuf.Bytes(2, msg)
+   sm.Signature = protobuf.Bytes(3, signature)
+   return nil
 }
 
 // Encode serializes the SignedMessage into the protobuf wire format.
@@ -62,55 +60,58 @@ func (sm *SignedMessage) Encode() ([]byte, error) {
    return message.Encode()
 }
 
-// ParseLicenseResponse is the single function needed to parse a response from the license server.
-// It now returns a slice of KeyContainers directly in the ParsedResponse.
-func ParseLicenseResponse(responseData []byte, originalRequestBytes []byte, privateKey *rsa.PrivateKey) (*ParsedResponse, error) {
+// Parse is the single function needed to parse a response from the license server.
+// It populates the receiver with the parsed keys or an error.
+func (pr *ParsedResponse) Parse(responseData []byte, originalRequestBytes []byte, privateKey *rsa.PrivateKey) error {
    var topLevelMessage protobuf.Message
    if err := topLevelMessage.Parse(responseData); err != nil {
-      return nil, fmt.Errorf("failed to parse top-level SignedMessage: %w", err)
+      return fmt.Errorf("failed to parse top-level SignedMessage: %w", err)
    }
 
    typeField, _ := topLevelMessage.Field(1)
    if typeField == nil {
-      return nil, fmt.Errorf("response is missing message type identifier")
+      return fmt.Errorf("response is missing message type identifier")
    }
-   msgType := typeField.Numeric
 
+   msgType := typeField.Numeric
    switch msgType {
    case 2: // MessageType LICENSE = 2
       msgField, found := topLevelMessage.Field(2)
       if !found || msgField.Message == nil {
-         return nil, fmt.Errorf("license response is missing the main message payload")
+         return fmt.Errorf("license response is missing the main message payload")
       }
       embeddedMessage := msgField.Message
 
       sessionKeyField, found := topLevelMessage.Field(4)
       if !found {
-         return nil, fmt.Errorf("license response is missing the session_key")
+         return fmt.Errorf("license response is missing the session_key")
       }
+
       // Decrypt the session key, passing nil for the random reader.
       decryptedSessionKey, err := rsa.DecryptOAEP(sha1.New(), nil, privateKey, sessionKeyField.Bytes, nil)
       if err != nil {
-         return nil, fmt.Errorf("failed to decrypt response session key: %w", err)
+         return fmt.Errorf("failed to decrypt response session key: %w", err)
       }
 
       keys, err := decodeLicenseFromMessage(embeddedMessage, decryptedSessionKey, originalRequestBytes)
       if err != nil {
-         return nil, fmt.Errorf("failed to decode license message: %w", err)
+         return fmt.Errorf("failed to decode license message: %w", err)
       }
-      return &ParsedResponse{Keys: keys}, nil
+      pr.Keys = keys
+      return nil
 
    case 3: // MessageType ERROR_RESPONSE = 3
       msgField, found := topLevelMessage.Field(2)
       if !found || msgField.Message == nil {
-         return nil, fmt.Errorf("error response is missing the main message payload")
+         return fmt.Errorf("error response is missing the main message payload")
       }
+
       licenseError, err := decodeErrorFromMessage(msgField.Message)
       if err != nil {
-         return nil, fmt.Errorf("failed to decode error message: %w", err)
+         return fmt.Errorf("failed to decode error message: %w", err)
       }
-      return &ParsedResponse{Error: licenseError}, nil
+      pr.Error = licenseError
+      return nil
    }
-
-   return nil, fmt.Errorf("unsupported message type in response: %d", msgType)
+   return fmt.Errorf("unsupported message type in response: %d", msgType)
 }

@@ -9,9 +9,9 @@ type LicenseRequest struct {
    Type      *protobuf.Field
 }
 
-// NewLicenseRequest creates and initializes a new LicenseRequest.
+// Build initializes a LicenseRequest with the given parameters.
 // The psshData parameter should be the raw bytes from the PSSH box.
-func NewLicenseRequest(clientID []byte, psshData []byte, requestType int) *LicenseRequest {
+func (lr *LicenseRequest) Build(clientID []byte, psshData []byte, requestType int) {
    // For a minimal implementation, we create a ContentIdentification message
    // where the widevine_pssh_data field is populated.
    // The provided psshData is used for the nested pssh_data field.
@@ -19,11 +19,9 @@ func NewLicenseRequest(clientID []byte, psshData []byte, requestType int) *Licen
    widevinePsshData := protobuf.Embed(1, psshDataField)
    contentIdentification := protobuf.Embed(2, widevinePsshData)
 
-   return &LicenseRequest{
-      ClientID:  protobuf.Bytes(1, clientID),
-      ContentID: contentIdentification,
-      Type:      protobuf.Varint(3, uint64(requestType)),
-   }
+   lr.ClientID = protobuf.Bytes(1, clientID)
+   lr.ContentID = contentIdentification
+   lr.Type = protobuf.Varint(3, uint64(requestType))
 }
 
 // Encode serializes the LicenseRequest into the protobuf wire format.
