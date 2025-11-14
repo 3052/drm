@@ -23,16 +23,12 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   var pssh WidevinePsshData
-   pssh.ContentID = []byte(ctv.content_id)
-   psshBytes, err := pssh.Encode()
+   psshBytes, err := BuildPsshData(nil, []byte(ctv.content_id))
    if err != nil {
       t.Fatal(err)
    }
 
-   var licReq LicenseRequest
-   licReq.Build(client_id, psshBytes, 1)
-   reqBytes, err := licReq.Encode()
+   reqBytes, err := BuildLicenseRequest(client_id, psshBytes, 1)
    if err != nil {
       t.Fatal(err)
    }
@@ -42,14 +38,9 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   var signedMsg SignedMessage
-   if err := signedMsg.Build(reqBytes, privateKey); err != nil {
-      t.Fatalf("Failed to create signed request: %v", err)
-   }
-
-   signedBytes, err := signedMsg.Encode()
+   signedBytes, err := BuildSignedMessage(reqBytes, privateKey)
    if err != nil {
-      t.Fatal(err)
+      t.Fatalf("Failed to create signed request: %v", err)
    }
 
    resp, err := http.Post(ctv.url_license, "", bytes.NewReader(signedBytes))
@@ -63,8 +54,8 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   var parsed ParsedResponse
-   if err := parsed.Parse(signedBytes, reqBytes, privateKey); err != nil {
+   keys, err := ParseLicenseResponse(signedBytes, reqBytes, privateKey)
+   if err != nil {
       t.Fatal(err)
    }
 
@@ -77,11 +68,13 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   key1, ok := parsed.GetKey(key_id)
+   // Use the standalone GetKey function.
+   foundKey, ok := GetKey(keys, key_id)
    if !ok {
-      t.Fatal("GetKey")
+      t.Fatal("GetKey: key not found in response")
    }
-   if !bytes.Equal(key1, key) {
+
+   if !bytes.Equal(foundKey, key) {
       t.Fatal("!bytes.Equal")
    }
 }

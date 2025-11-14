@@ -2,6 +2,7 @@ package widevine
 
 import (
    "41.neocities.org/protobuf"
+   "bytes"
    "crypto/aes"
    "crypto/cipher"
    "encoding/binary"
@@ -59,10 +60,8 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
       if keyField.Message == nil {
          continue
       }
-
       kc := &KeyContainer{}
       embeddedKeyContainer := keyField.Message
-
       if idField, found := embeddedKeyContainer.Field(1); found {
          kc.ID = idField.Bytes
       }
@@ -97,4 +96,15 @@ func decodeLicenseFromMessage(message protobuf.Message, decryptedSessionKey []by
    }
 
    return keys, nil
+}
+
+// GetKey searches a slice of KeyContainers for a key by its ID.
+// It returns the key and true if found, otherwise it returns nil and false.
+func GetKey(keys []*KeyContainer, id []byte) ([]byte, bool) {
+   for _, keyContainer := range keys {
+      if bytes.Equal(keyContainer.ID, id) {
+         return keyContainer.Key, true
+      }
+   }
+   return nil, false
 }
