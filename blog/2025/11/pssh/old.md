@@ -1,10 +1,3 @@
-# pssh
-
-1. MPD PSSH
-2. MPD key ID
-3. init PSSH
-4. init key ID
-
 ## one step
 
 we cant do it in one step, because CTV only has PSSH in the init file, and

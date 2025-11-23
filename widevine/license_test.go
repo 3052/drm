@@ -28,7 +28,7 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   reqBytes, err := BuildLicenseRequest(client_id, psshBytes, 1)
+   reqBytes, err := BuildLicenseRequest(client_id, psshBytes)
    if err != nil {
       t.Fatal(err)
    }
