@@ -22,8 +22,10 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-
-   psshBytes, err := BuildPsshData(nil, []byte(ctv.content_id))
+   pssh := &WidevinePsshData{
+      ContentID: []byte(ctv.content_id),
+   }
+   psshBytes, err := pssh.Marshal()
    if err != nil {
       t.Fatal(err)
    }

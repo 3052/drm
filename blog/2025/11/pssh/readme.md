@@ -1,12 +1,20 @@
-# pssh
+# PSSH
 
-1. MPD content ID
-2. MPD key ID
-3. initialization content ID
-4. initialization key ID
+1. get `default_KID` from MPD
+https://ctv.ca MPD is missing PSSH
 
-## 1
+2. check if MPD has PSSH, check if PSSH has content ID
+https://hulu.com poisons the PSSH so we only want content ID
 
-we need key ID
+3. check if initialization has PSSH, check if PSSH has content ID
 
-## 2
+## to do
+
+1. add DASH `default_KID`
+done
+
+2. remove MP4 tenc
+done
+
+3. remove MP4 schi
+done
