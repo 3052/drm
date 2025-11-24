@@ -7,14 +7,3 @@ https://ctv.ca MPD is missing PSSH
 https://hulu.com poisons the PSSH so we only want content ID
 
 3. check if initialization has PSSH, check if PSSH has content ID
-
-## to do
-
-1. add DASH `default_KID`
-done
-
-2. remove MP4 tenc
-done
-
-3. remove MP4 schi
-done

@@ -23,17 +23,13 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   // Updated: Use PsshData struct
+   // 1. Create the PsshData struct
    pssh := &PsshData{
       ContentID: []byte(ctv.content_id),
    }
-   psshBytes, err := pssh.Marshal()
-   if err != nil {
-      t.Fatal(err)
-   }
 
-   // Updated: BuildLicenseRequest no longer takes requestType
-   reqBytes, err := BuildLicenseRequest(client_id, psshBytes)
+   // 2. Build the License Request directly from the pssh struct
+   reqBytes, err := pssh.BuildLicenseRequest(client_id)
    if err != nil {
       t.Fatal(err)
    }
@@ -43,11 +39,13 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
+   // 3. Sign the request
    signedBytes, err := BuildSignedMessage(reqBytes, privateKey)
    if err != nil {
       t.Fatalf("Failed to create signed request: %v", err)
    }
 
+   // 4. Send to License Server
    resp, err := http.Post(ctv.url_license, "", bytes.NewReader(signedBytes))
    if err != nil {
       t.Fatal(err)
@@ -59,6 +57,7 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
+   // 5. Parse Response
    keys, err := ParseLicenseResponse(signedBytes, reqBytes, privateKey)
    if err != nil {
       t.Fatal(err)
@@ -73,7 +72,7 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   // Use the standalone GetKey function.
+   // 6. Verify Key
    foundKey, ok := GetKey(keys, key_id)
    if !ok {
       t.Fatal("GetKey: key not found in response")
