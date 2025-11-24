@@ -2,25 +2,54 @@ package widevine
 
 import "41.neocities.org/protobuf"
 
-// BuildPsshData serializes the key IDs and content ID into the protobuf wire format
-// for a Widevine PSSH box body. The resulting byte slice can be used as the
-// 'psshData' parameter for the LicenseRequest.Build method.
-func BuildPsshData(keyIDs [][]byte, contentID []byte) ([]byte, error) {
+// PsshData represents the Widevine-specific protobuf message.
+type PsshData struct {
+   KeyIDs    [][]byte
+   ContentID []byte
+}
+
+// Marshal serializes the PsshData struct into the protobuf wire format.
+func (p *PsshData) Marshal() ([]byte, error) {
    var message protobuf.Message
 
-   // Add all KeyIDs. Field number is 2.
-   for _, keyID := range keyIDs {
-      if keyID != nil {
-         field := protobuf.Bytes(2, keyID)
-         message = append(message, field)
+   // Field 2: KeyIDs (Repeated)
+   for _, keyID := range p.KeyIDs {
+      if len(keyID) > 0 {
+         message = append(message, protobuf.Bytes(2, keyID))
       }
    }
 
-   // Add ContentID if it exists. Field number is 4.
-   if len(contentID) > 0 {
-      field := protobuf.Bytes(4, contentID)
-      message = append(message, field)
+   // Field 4: ContentID (Optional)
+   if len(p.ContentID) > 0 {
+      message = append(message, protobuf.Bytes(4, p.ContentID))
    }
 
    return message.Encode()
+}
+
+// Unmarshal parses the protobuf wire format into the PsshData struct.
+func (p *PsshData) Unmarshal(data []byte) error {
+   var message protobuf.Message
+   if err := message.Parse(data); err != nil {
+      return err
+   }
+
+   // Reset fields
+   p.KeyIDs = nil
+   p.ContentID = nil
+
+   // Field 2: KeyIDs
+   it := message.Iterator(2)
+   for it.Next() {
+      if field := it.Field(); field != nil {
+         p.KeyIDs = append(p.KeyIDs, field.Bytes)
+      }
+   }
+
+   // Field 4: ContentID
+   if field, found := message.Field(4); found {
+      p.ContentID = field.Bytes
+   }
+
+   return nil
 }

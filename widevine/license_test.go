@@ -23,11 +23,16 @@ func TestLicense(t *testing.T) {
       t.Fatal(err)
    }
 
-   psshBytes, err := BuildPsshData(nil, []byte(ctv.content_id))
+   // Updated: Use PsshData struct
+   pssh := &PsshData{
+      ContentID: []byte(ctv.content_id),
+   }
+   psshBytes, err := pssh.Marshal()
    if err != nil {
       t.Fatal(err)
    }
 
+   // Updated: BuildLicenseRequest no longer takes requestType
    reqBytes, err := BuildLicenseRequest(client_id, psshBytes)
    if err != nil {
       t.Fatal(err)
