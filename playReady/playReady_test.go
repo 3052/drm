@@ -221,13 +221,13 @@ func TestKey(t *testing.T) {
       if err != nil {
          t.Fatal(err)
       }
-      var licenseVar License
-      coord, err := licenseVar.Decrypt(data, encryptSignKey)
+      var license_var License
+      coord, err := license_var.Decrypt(data, encryptSignKey)
       if err != nil {
          t.Fatal(err)
       }
-      UuidOrGuid(licenseVar.ContentKey.KeyId[:])
-      if hex.EncodeToString(licenseVar.ContentKey.KeyId[:]) != test.kid_uuid {
+      UuidOrGuid(license_var.ContentKey.KeyId[:])
+      if hex.EncodeToString(license_var.ContentKey.KeyId[:]) != test.kid_uuid {
          t.Fatal(".KeyId")
       }
       if hex.EncodeToString(coord.Key()) != test.key {
