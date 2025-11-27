@@ -13,7 +13,7 @@ var Details = map[string][]app{
       {
          url:   "play.google.com/store/apps/details?id=com.tubitv",
          drm:   "clearKey",
-         rank:  "#3 top free entertainment",
+         rank:  "#1 top free entertainment",
          title: "Tubi: Free Movies & Live TV",
       },
       {
