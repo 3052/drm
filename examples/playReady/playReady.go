@@ -8,6 +8,12 @@ import (
    "os"
 )
 
+type command struct {
+   encrypt_sign int64
+   g1           string
+   z1           string
+}
+
 func (c *command) do_g1_z1() error {
    // g1
    data, err := os.ReadFile(c.g1)
@@ -62,10 +68,4 @@ func (c *command) run() error {
    }
    flag.Usage()
    return nil
-}
-
-type command struct {
-   encrypt_sign int64
-   g1           string
-   z1           string
 }
