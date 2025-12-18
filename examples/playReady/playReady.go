@@ -9,6 +9,35 @@ import (
    "os"
 )
 
+func (c *command) do_g1_z1() error {
+   // z1
+   data, err := os.ReadFile(c.z1)
+   if err != nil {
+      return err
+   }
+   z1 := new(big.Int).SetBytes(data)
+   encrypt_sign_key := big.NewInt(c.encrypt_sign)
+   err = write_file("EncryptSignKey", encrypt_sign_key.Bytes())
+   if err != nil {
+      return err
+   }
+   // g1
+   data, err = os.ReadFile(c.g1)
+   if err != nil {
+      return err
+   }
+   var certificate playReady.Chain
+   err = certificate.Decode(data)
+   if err != nil {
+      return err
+   }
+   err = certificate.Leaf(z1, encrypt_sign_key)
+   if err != nil {
+      return err
+   }
+   return write_file("CertificateChain", certificate.Encode())
+}
+
 func write_file(name string, data []byte) error {
    log.Println("WriteFile", name)
    return os.WriteFile(name, data, os.ModePerm)
@@ -49,35 +78,6 @@ type command struct {
    g1           string
    z1           string
    key_path     string // Added to store the path for the key file
-}
-
-func (c *command) do_g1_z1() error {
-   // g1
-   data, err := os.ReadFile(c.g1)
-   if err != nil {
-      return err
-   }
-   var certificate playReady.Chain
-   err = certificate.Decode(data)
-   if err != nil {
-      return err
-   }
-   err = write_file("CertificateChain", certificate.Encode())
-   if err != nil {
-      return err
-   }
-   // z1
-   data, err = os.ReadFile(c.z1)
-   if err != nil {
-      return err
-   }
-   z1 := new(big.Int).SetBytes(data)
-   encrypt_sign_key := big.NewInt(c.encrypt_sign)
-   err = certificate.Leaf(z1, encrypt_sign_key)
-   if err != nil {
-      return err
-   }
-   return write_file("EncryptSignKey", encrypt_sign_key.Bytes())
 }
 
 func (c *command) do_read_key() error {

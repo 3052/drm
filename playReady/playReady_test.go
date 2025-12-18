@@ -13,6 +13,8 @@ import (
    "testing"
 )
 
+var device = SL2000
+
 func TestLeaf(t *testing.T) {
    data, err := os.ReadFile(device.folder + device.g1)
    if err != nil {
@@ -28,12 +30,12 @@ func TestLeaf(t *testing.T) {
       t.Fatal(err)
    }
    z1 := new(big.Int).SetBytes(data)
-   encryptSignKey := big.NewInt('!')
-   err = certificate.Leaf(z1, encryptSignKey)
+   encrypt_sign_key := big.NewInt(1)
+   err = certificate.Leaf(z1, encrypt_sign_key)
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(device.folder+"EncryptSignKey", encryptSignKey.Bytes())
+   err = write_file(device.folder+"EncryptSignKey", encrypt_sign_key.Bytes())
    if err != nil {
       t.Fatal(err)
    }
@@ -74,14 +76,14 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   encryptSignKey := new(big.Int).SetBytes(data)
+   encrypt_sign_key := new(big.Int).SetBytes(data)
    for _, test := range key_tests[:1] {
       kid, err := hex.DecodeString(test.kid_uuid)
       if err != nil {
          t.Fatal(err)
       }
       UuidOrGuid(kid)
-      data, err = certificate.RequestBody(kid, encryptSignKey)
+      data, err = certificate.RequestBody(kid, encrypt_sign_key)
       if err != nil {
          t.Fatal(err)
       }
@@ -99,7 +101,7 @@ func TestKey(t *testing.T) {
          t.Fatal(err)
       }
       var license_var License
-      coord, err := license_var.Decrypt(data, encryptSignKey)
+      coord, err := license_var.Decrypt(data, encrypt_sign_key)
       if err != nil {
          t.Fatal(err)
       }
@@ -112,8 +114,6 @@ func TestKey(t *testing.T) {
       }
    }
 }
-
-var device = SL2000
 
 var SL3000 = device_config{
    folder: "ignore/",
