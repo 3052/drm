@@ -29,9 +29,9 @@ func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
       }
       return rsaKey, nil
    }
-   rsaKey, errPKCS1 := x509.ParsePKCS1PrivateKey(block.Bytes)
-   if errPKCS1 != nil {
-      return nil, fmt.Errorf("failed to parse private key: PKCS#8 (%v), PKCS#1 (%v)", err, errPKCS1)
+   rsaKey, errPkcs1 := x509.ParsePKCS1PrivateKey(block.Bytes)
+   if errPkcs1 != nil {
+      return nil, fmt.Errorf("failed to parse private key: PKCS#8 (%v), PKCS#1 (%v)", err, errPkcs1)
    }
    return rsaKey, nil
 }

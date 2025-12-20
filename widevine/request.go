@@ -6,7 +6,7 @@ import (
 )
 
 // BuildLicenseRequest creates and serializes a LicenseRequest protobuf message.
-func (p *PsshData) BuildLicenseRequest(clientID []byte) ([]byte, error) {
+func (p *PsshData) BuildLicenseRequest(clientId []byte) ([]byte, error) {
    psshBytes, err := p.Marshal()
    if err != nil {
       return nil, err
@@ -16,7 +16,7 @@ func (p *PsshData) BuildLicenseRequest(clientID []byte) ([]byte, error) {
    contentIdentification := protobuf.Embed(2, widevinePsshData)
 
    message := protobuf.Message{
-      protobuf.Bytes(1, clientID),
+      protobuf.Bytes(1, clientId),
       contentIdentification,
       protobuf.Varint(3, 1), // STREAMING
    }

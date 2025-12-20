@@ -25,7 +25,7 @@ func TestLicense(t *testing.T) {
 
    // 1. Create the PsshData struct
    pssh := &PsshData{
-      ContentID: []byte(ctv.content_id),
+      ContentId: []byte(ctv.content_id),
    }
 
    // 2. Build the License Request directly from the pssh struct

@@ -21,8 +21,8 @@ const (
 )
 
 type KeyContainer struct {
-   ID  []byte
-   IV  []byte
+   Id  []byte
+   Iv  []byte
    Key []byte
 }
 
@@ -79,13 +79,13 @@ func decodeLicenseFromMessage(message protobuf.Message, sessionKey []byte, reque
       kc := &KeyContainer{}
       m := it.Field().Message
       if f, ok := m.Field(1); ok {
-         kc.ID = f.Bytes
+         kc.Id = f.Bytes
       }
       if f, ok := m.Field(2); ok {
-         kc.IV = f.Bytes
+         kc.Iv = f.Bytes
       }
       if f, ok := m.Field(3); ok {
-         dec := cipher.NewCBCDecrypter(ckCipher, kc.IV)
+         dec := cipher.NewCBCDecrypter(ckCipher, kc.Iv)
          plain := make([]byte, len(f.Bytes))
          dec.CryptBlocks(plain, f.Bytes)
          unpadded, _ := padding.NewPKCS7Padding(aes.BlockSize).Unpad(plain)
@@ -98,7 +98,7 @@ func decodeLicenseFromMessage(message protobuf.Message, sessionKey []byte, reque
 
 func GetKey(keys []*KeyContainer, id []byte) ([]byte, bool) {
    for _, k := range keys {
-      if bytes.Equal(k.ID, id) {
+      if bytes.Equal(k.Id, id) {
          return k.Key, true
       }
    }
