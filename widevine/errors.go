@@ -2,7 +2,8 @@ package widevine
 
 import (
    "41.neocities.org/protobuf"
-   "fmt"
+   "strconv"
+   "strings"
 )
 
 // LicenseError reflects the structure of the Widevine LicenseError protobuf.
@@ -12,10 +13,13 @@ type LicenseError struct {
 
 // Error implements the standard Go error interface.
 func (le *LicenseError) Error() string {
-   if le.ErrorCode != nil {
-      return fmt.Sprintf("widevine license error: code %d", le.ErrorCode.Numeric)
+   if le.ErrorCode == nil {
+      return "widevine license error: unknown code"
    }
-   return "widevine license error: unknown code"
+   var sb strings.Builder
+   sb.WriteString("widevine license error: code ")
+   sb.WriteString(strconv.FormatUint(le.ErrorCode.Numeric, 10))
+   return sb.String()
 }
 
 // decodeErrorFromMessage constructs a LicenseError struct from a pre-parsed protobuf message.
