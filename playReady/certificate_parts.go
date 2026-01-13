@@ -3,7 +3,92 @@ package playReady
 import (
    "encoding/binary"
    "errors"
+   "fmt"
 )
+
+// ManufacturerData holds the properly parsed manufacturer data from the certificate,
+// including flags and three distinct name/number fields.
+type ManufacturerData struct {
+   Flags            uint32
+   ManufacturerName []byte
+   ModelName        []byte
+   ModelNumber      []byte
+}
+
+// decode populates the ManufacturerData by parsing the flags and three length-prefixed byte arrays.
+func (m *ManufacturerData) decode(data []byte) error {
+   // --- Parse Flags ---
+   if len(data) < 4 {
+      return fmt.Errorf("manufacturer data too short for flags: expected at least 4 bytes, got %d", len(data))
+   }
+   m.Flags = binary.BigEndian.Uint32(data)
+   data = data[4:] // Advance past the flags
+
+   // Helper function to read a length-prefixed byte array
+   readByteArray := func(d []byte) ([]byte, []byte, error) {
+      if len(d) < 4 {
+         return nil, nil, fmt.Errorf("data too short for length prefix: expected 4 bytes, got %d", len(d))
+      }
+      length := binary.BigEndian.Uint32(d)
+      d = d[4:]
+      if uint32(len(d)) < length {
+         return nil, nil, fmt.Errorf("data too short for value: expected %d bytes, got %d", length, len(d))
+      }
+      return d[length:], d[:length], nil
+   }
+
+   var err error
+   var value []byte
+
+   // --- Parse Manufacturer Name ---
+   data, value, err = readByteArray(data)
+   if err != nil {
+      return fmt.Errorf("failed to read manufacturer name: %w", err)
+   }
+   m.ManufacturerName = value
+
+   // --- Parse Model Name ---
+   data, value, err = readByteArray(data)
+   if err != nil {
+      return fmt.Errorf("failed to read model name: %w", err)
+   }
+   m.ModelName = value
+
+   // --- Parse Model Number ---
+   _, value, err = readByteArray(data)
+   if err != nil {
+      return fmt.Errorf("failed to read model number: %w", err)
+   }
+   m.ModelNumber = value
+
+   return nil
+}
+
+// encode returns the serialized byte representation of the ManufacturerData.
+func (m *ManufacturerData) encode() []byte {
+   data := make([]byte, 0, m.size())
+   data = binary.BigEndian.AppendUint32(data, m.Flags)
+   data = binary.BigEndian.AppendUint32(data, uint32(len(m.ManufacturerName)))
+   data = append(data, m.ManufacturerName...)
+   data = binary.BigEndian.AppendUint32(data, uint32(len(m.ModelName)))
+   data = append(data, m.ModelName...)
+   data = binary.BigEndian.AppendUint32(data, uint32(len(m.ModelNumber)))
+   data = append(data, m.ModelNumber...)
+   return data
+}
+
+// size returns the byte size of the serialized ManufacturerData.
+func (m *ManufacturerData) size() int {
+   return 4 + // Flags
+      4 + len(m.ManufacturerName) +
+      4 + len(m.ModelName) +
+      4 + len(m.ModelNumber)
+}
+
+// ftlv wraps the ManufacturerData in an Ftlv structure for serialization.
+func (m *ManufacturerData) ftlv(Flag, Type uint16) *Ftlv {
+   return newFtlv(Flag, Type, m.encode())
+}
 
 // CertFeatures defines the features supported by the certificate.
 type CertFeatures struct {

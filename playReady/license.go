@@ -154,6 +154,8 @@ func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
       return nil, err
    }
    laDigest := sha256.Sum256(laData)
+
+   // REVERTED to original, working SignedInfo creation.
    signedInfo := xml.SignedInfo{
       XmlNs: "http://www.w3.org/2000/09/xmldsig#",
       Reference: xml.Reference{
@@ -161,6 +163,7 @@ func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
          DigestValue: laDigest[:],
       },
    }
+
    signedData, err := signedInfo.Marshal()
    if err != nil {
       return nil, err
@@ -243,7 +246,7 @@ func newLa(cipherData, kid []byte) (*xml.La, error) {
          XmlNs: "http://www.w3.org/2001/04/xmlenc#",
          Type:  "http://www.w3.org/2001/04/xmlenc#Element",
          EncryptionMethod: xml.Algorithm{
-            Algorithm: "http://www.w.org/2001/04/xmlenc#aes128-cbc",
+            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
          },
          KeyInfo: xml.KeyInfo{
             XmlNs: "http://www.w3.org/2000/09/xmldsig#",

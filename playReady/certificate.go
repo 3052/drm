@@ -12,16 +12,19 @@ import (
 
 // Certificate represents a PlayReady certificate structure.
 type Certificate struct {
-   Magic             [4]byte          // 0:4
-   Version           uint32           // 4:8
-   Length            uint32           // 8:12
-   LengthToSignature uint32           // 12:16
-   Info              *CertificateInfo // 0x1
-   Security          *Ftlv            // 0x11
-   Features          *Ftlv            // 0x5
-   KeyInfo           *KeyInfo         // 0x6
-   Manufacturer      *Ftlv            // 0x7
-   Signature         *CertSignature   // 0x8
+   Magic             [4]byte // 0:4
+   Version           uint32  // 4:8
+   Length            uint32  // 8:12
+   LengthToSignature uint32  // 12:16
+   Info              *CertificateInfo
+   Security          *Ftlv
+   Features          *Ftlv
+   KeyInfo           *KeyInfo
+   // Manufacturer provides easy access to the parsed manufacturer data.
+   Manufacturer *ManufacturerData
+   // manufacturerFtlv stores the original Ftlv block to ensure byte-perfect re-serialization for verification.
+   manufacturerFtlv *Ftlv
+   Signature        *CertSignature
 }
 
 // Constants for object types within the certificate structure.
@@ -75,7 +78,13 @@ func (c *Certificate) decode(data []byte) (int, error) {
          c.KeyInfo = &KeyInfo{}
          c.KeyInfo.decode(value.Value)
       case objTypeManufacturer: // 0x0007
-         c.Manufacturer = &value
+         // Store the original Ftlv block for perfect re-serialization.
+         c.manufacturerFtlv = &value
+         // Also parse the data into the convenient struct for access.
+         c.Manufacturer = &ManufacturerData{}
+         if err := c.Manufacturer.decode(value.Value); err != nil {
+            return 0, fmt.Errorf("failed to parse manufacturer object: %w", err)
+         }
       case objTypeSignature: // 0x0008
          c.Signature = &CertSignature{}
          err := c.Signature.decode(value.Value)
@@ -97,7 +106,8 @@ func (c *Certificate) Append(data []byte) []byte {
    data = binary.BigEndian.AppendUint32(data, c.Length)
    data = binary.BigEndian.AppendUint32(data, c.LengthToSignature)
    if c.Info != nil {
-      data = c.Info.ftlv(1, 1).Append(data)
+      // The flag for Info is always 1
+      data = c.Info.ftlv(1, objTypeBasic).Append(data)
    }
    if c.Security != nil {
       data = c.Security.Append(data)
@@ -106,13 +116,22 @@ func (c *Certificate) Append(data []byte) []byte {
       data = c.Features.Append(data)
    }
    if c.KeyInfo != nil {
-      data = c.KeyInfo.ftlv(1, 6).Append(data)
+      // The flag for KeyInfo is always 1
+      data = c.KeyInfo.ftlv(1, objTypeKey).Append(data)
    }
-   if c.Manufacturer != nil {
-      data = c.Manufacturer.Append(data)
+
+   // CRITICAL FIX: Prioritize the original ftlv for re-serialization,
+   // but fall back to the public struct for newly created certificates.
+   if c.manufacturerFtlv != nil {
+      data = c.manufacturerFtlv.Append(data)
+   } else if c.Manufacturer != nil {
+      // The flag for Manufacturer is typically 0
+      data = c.Manufacturer.ftlv(0, objTypeManufacturer).Append(data)
    }
+
    if c.Signature != nil {
-      data = c.Signature.ftlv(0, 8).Append(data)
+      // The flag for Signature is always 0
+      data = c.Signature.ftlv(0, objTypeSignature).Append(data)
    }
    return data
 }
@@ -137,9 +156,15 @@ func (c *Certificate) size() (uint32, uint32) {
       n += new(Ftlv).size()
       n += c.KeyInfo.size()
    }
-   if c.Manufacturer != nil {
+
+   // CRITICAL FIX: Ensure size calculation works for both decoded and created certificates.
+   if c.manufacturerFtlv != nil {
+      n += c.manufacturerFtlv.size()
+   } else if c.Manufacturer != nil {
+      n += new(Ftlv).size()
       n += c.Manufacturer.size()
    }
+
    n1 := n
    n1 += new(Ftlv).size()
    n1 += c.Signature.size()

@@ -79,7 +79,7 @@ type Challenge struct {
 }
 
 // InnerChallenge contains the signed license acquisition data.
-type InnerChallenge struct { // Renamed from Challenge
+type InnerChallenge struct {
    XmlNs     string `xml:"xmlns,attr"`
    La        *La
    Signature Signature
@@ -132,7 +132,7 @@ type Algorithm struct {
 }
 
 // KeyInfo contains information about the encrypted key.
-type KeyInfo struct { // This is the chosen "KeyInfo" type
+type KeyInfo struct {
    XmlNs        string `xml:"xmlns,attr"`
    EncryptedKey EncryptedKey
 }
@@ -145,7 +145,7 @@ type EncryptedKey struct {
 }
 
 // EncryptedKeyInfo provides metadata for the encrypted key.
-type EncryptedKeyInfo struct { // Renamed from KeyInfo
+type EncryptedKeyInfo struct {
    XmlNs   string `xml:"xmlns,attr"`
    KeyName string
 }
@@ -182,6 +182,8 @@ type Signature struct {
    SignatureValue Bytes
 }
 
+// SignedInfo is the element that is digitally signed.
+// REVERTED to original, working structure.
 type SignedInfo struct {
    XmlNs     string `xml:"xmlns,attr"`
    Reference Reference
@@ -191,6 +193,8 @@ func (s *SignedInfo) Marshal() ([]byte, error) {
    return xml.Marshal(s)
 }
 
+// Reference specifies a digest value.
+// REVERTED to original, working structure.
 type Reference struct {
    Uri         string `xml:"URI,attr"`
    DigestValue Bytes

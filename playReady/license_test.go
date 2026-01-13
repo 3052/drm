@@ -77,7 +77,7 @@ func TestKey(t *testing.T) {
       t.Fatal(err)
    }
    encrypt_sign_key := new(big.Int).SetBytes(data)
-   for _, test := range key_tests[:1] {
+   for _, test := range key_tests {
       kid, err := hex.DecodeString(test.kid_uuid)
       if err != nil {
          t.Fatal(err)
@@ -127,19 +127,6 @@ var key_tests = []struct {
    req      func(*http.Request, string) error
 }{
    {
-      key: "67376174a357f3ec9c1466055de9551d",
-      // below is FHD (1920x1080), UHD needs SL3000
-      kid_uuid: "010521b274da1acbbd3c6f124a238c67",
-      req: func(req *http.Request, cache string) error {
-         data, err := os.ReadFile(cache + "/hboMax/PlayReady")
-         if err != nil {
-            return err
-         }
-         req.URL, err = url.Parse(string(data))
-         return err
-      },
-   },
-   {
       key:      "00000000000000000000000000000000",
       kid_uuid: "10000000000000000000000000000000",
       req: func(req *http.Request, _ string) error {
@@ -150,6 +137,19 @@ var key_tests = []struct {
             RawQuery: "cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:aescbc",
          }
          return nil
+      },
+   },
+   {
+      key: "67376174a357f3ec9c1466055de9551d",
+      // below is FHD (1920x1080), UHD needs SL3000
+      kid_uuid: "010521b274da1acbbd3c6f124a238c67",
+      req: func(req *http.Request, cache string) error {
+         data, err := os.ReadFile(cache + "/hboMax/PlayReady")
+         if err != nil {
+            return err
+         }
+         req.URL, err = url.Parse(string(data))
+         return err
       },
    },
    {
@@ -221,7 +221,7 @@ var key_tests = []struct {
          return err
       },
    },
-}
+}[:1]
 
 func post(req *http.Request) ([]byte, error) {
    req.Header.Set("content-type", "text/xml")
