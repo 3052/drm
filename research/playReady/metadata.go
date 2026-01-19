@@ -1,179 +1,323 @@
 package bcert
 
 import (
-   "bytes"
-   "encoding/binary"
-   "errors"
+	"bytes"
+	"encoding/binary"
+	"errors"
 )
 
-func parseSignatureInfo(data []byte) (*SignatureInfo, error) {
-   if len(data) < 4 {
-      return nil, errors.New("signature info data too short")
-   }
+func parseDomainInfo(data []byte) (*DomainInformation, error) {
+	if len(data) < 36 {
+		return nil, errors.New("domain info too short")
+	}
 
-   info := &SignatureInfo{}
-   offset := 0
+	info := &DomainInformation{}
+	copy(info.ServiceID[:], data[0:16])
+	copy(info.AccountID[:], data[16:32])
+	info.Revision = binary.LittleEndian.Uint32(data[32:])
 
-   info.SignatureType = binary.LittleEndian.Uint16(data[offset:])
-   offset += 2
-   sigLen := binary.LittleEndian.Uint16(data[offset:])
-   offset += 2
+	urlLen := binary.LittleEndian.Uint32(data[36:])
+	if urlLen > 0 && len(data) >= 40+int(urlLen) {
+		info.DomainURL = make([]byte, urlLen)
+		copy(info.DomainURL, data[40:40+urlLen])
+	}
 
-   if offset+int(sigLen) > len(data) {
-      return nil, errors.New("signature truncated")
-   }
-
-   info.Signature = make([]byte, sigLen)
-   copy(info.Signature, data[offset:offset+int(sigLen)])
-   offset += int(sigLen)
-
-   if sigLen%4 != 0 {
-      offset += 4 - int(sigLen%4)
-   }
-
-   if offset+4 > len(data) {
-      return nil, errors.New("issuer key length missing")
-   }
-
-   keyLenBits := binary.LittleEndian.Uint32(data[offset:])
-   offset += 4
-   keyLenBytes := int(keyLenBits) / 8
-
-   if offset+keyLenBytes > len(data) {
-      return nil, errors.New("issuer key truncated")
-   }
-
-   info.IssuerKey = make([]byte, keyLenBytes)
-   copy(info.IssuerKey, data[offset:offset+keyLenBytes])
-
-   return info, nil
+	return info, nil
 }
 
-func serializeSignatureInfo(buf *bytes.Buffer, info *SignatureInfo) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeSignature, FlagMustUnderstand)
+func serializeDomainInfo(buf *bytes.Buffer, info *DomainInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeDomain, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
 
-   binary.Write(buf, binary.LittleEndian, info.SignatureType)
-   sigLen := uint16(len(info.Signature))
-   binary.Write(buf, binary.LittleEndian, sigLen)
-   buf.Write(info.Signature)
+	buf.Write(info.ServiceID[:])
+	buf.Write(info.AccountID[:])
+	binary.Write(buf, binary.LittleEndian, info.Revision)
+	binary.Write(buf, binary.LittleEndian, uint32(len(info.DomainURL)))
+	buf.Write(info.DomainURL)
 
-   if sigLen%4 != 0 {
-      buf.Write(make([]byte, 4-(sigLen%4)))
-   }
-
-   keyLenBits := uint32(len(info.IssuerKey) * 8)
-   binary.Write(buf, binary.LittleEndian, keyLenBits)
-   buf.Write(info.IssuerKey)
-
-   if len(info.IssuerKey)%4 != 0 {
-      buf.Write(make([]byte, 4-(len(info.IssuerKey)%4)))
-   }
-
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
 }
 
-func parseSilverlightInfo(data []byte) (*SilverlightInfo, error) {
-   if len(data) < 8 {
-      return nil, errors.New("silverlight info data too short")
-   }
-   return &SilverlightInfo{
-      SecurityVersion: binary.LittleEndian.Uint32(data[0:]),
-      PlatformID:      binary.LittleEndian.Uint32(data[4:]),
-   }, nil
+func parsePCInfo(data []byte) (*PCInfo, error) {
+	if len(data) < 4 {
+		return nil, errors.New("pc info too short")
+	}
+
+	return &PCInfo{
+		SecurityVersion: binary.LittleEndian.Uint32(data[0:]),
+	}, nil
 }
 
-func serializeSilverlightInfo(buf *bytes.Buffer, info *SilverlightInfo) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeSilverlight, FlagMustUnderstand)
-   binary.Write(buf, binary.LittleEndian, info.SecurityVersion)
-   binary.Write(buf, binary.LittleEndian, info.PlatformID)
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
+func serializePCInfo(buf *bytes.Buffer, info *PCInfo) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypePC, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+
+	binary.Write(buf, binary.LittleEndian, info.SecurityVersion)
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
 }
 
-func parseMeteringInfo(data []byte) (*MeteringInfo, error) {
-   if len(data) < 20 {
-      return nil, errors.New("metering info data too short")
-   }
+func parseDeviceInfo(data []byte) (*DeviceInformation, error) {
+	if len(data) < 64 {
+		return nil, errors.New("device info too short")
+	}
 
-   info := &MeteringInfo{}
-   offset := 0
-   copy(info.MeteringID[:], data[offset:offset+16])
-   offset += 16
-
-   urlLen := binary.LittleEndian.Uint32(data[offset:])
-   offset += 4
-
-   if offset+int(urlLen) > len(data) {
-      return nil, errors.New("metering URL truncated")
-   }
-
-   if urlLen > 0 {
-      info.MeteringURL = make([]byte, urlLen)
-      copy(info.MeteringURL, data[offset:offset+int(urlLen)])
-   }
-
-   return info, nil
+	info := &DeviceInformation{}
+	copy(info.ManufacturerKey[:], data[0:64])
+	return info, nil
 }
 
-func serializeMeteringInfo(buf *bytes.Buffer, info *MeteringInfo) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeMetering, FlagMustUnderstand)
+func serializeDeviceInfo(buf *bytes.Buffer, info *DeviceInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeDevice, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
 
-   buf.Write(info.MeteringID[:])
-   urlLen := uint32(len(info.MeteringURL))
-   binary.Write(buf, binary.LittleEndian, urlLen)
-   buf.Write(info.MeteringURL)
+	buf.Write(info.ManufacturerKey[:])
 
-   if urlLen%4 != 0 {
-      buf.Write(make([]byte, 4-(urlLen%4)))
-   }
-
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
 }
 
-func parseServerTypeInfo(data []byte) (*ServerTypeInfo, error) {
-   if len(data) < 4 {
-      return nil, errors.New("server type info data too short")
-   }
-   return &ServerTypeInfo{WarningStartDate: binary.LittleEndian.Uint32(data)}, nil
+func parseManufacturerInfo(data []byte) (*ManufacturerInformation, error) {
+	if len(data) < 12 {
+		return nil, errors.New("manufacturer info too short")
+	}
+
+	info := &ManufacturerInformation{}
+	offset := 0
+
+	nameLen := binary.LittleEndian.Uint32(data[offset:])
+	offset += 4
+	if nameLen > 0 && offset+int(nameLen) <= len(data) {
+		info.ManufacturerName = make([]byte, nameLen)
+		copy(info.ManufacturerName, data[offset:offset+int(nameLen)])
+		offset += int(nameLen)
+	}
+
+	if offset+4 > len(data) {
+		return info, nil
+	}
+	modelLen := binary.LittleEndian.Uint32(data[offset:])
+	offset += 4
+	if modelLen > 0 && offset+int(modelLen) <= len(data) {
+		info.ModelName = make([]byte, modelLen)
+		copy(info.ModelName, data[offset:offset+int(modelLen)])
+		offset += int(modelLen)
+	}
+
+	if offset+4 > len(data) {
+		return info, nil
+	}
+	numberLen := binary.LittleEndian.Uint32(data[offset:])
+	offset += 4
+	if numberLen > 0 && offset+int(numberLen) <= len(data) {
+		info.ModelNumber = make([]byte, numberLen)
+		copy(info.ModelNumber, data[offset:offset+int(numberLen)])
+	}
+
+	return info, nil
 }
 
-func serializeServerTypeInfo(buf *bytes.Buffer, info *ServerTypeInfo) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeServer, FlagMustUnderstand)
-   binary.Write(buf, binary.LittleEndian, info.WarningStartDate)
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
+func serializeManufacturerInfo(buf *bytes.Buffer, info *ManufacturerInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeManufacturer, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+
+	binary.Write(buf, binary.LittleEndian, uint32(len(info.ManufacturerName)))
+	buf.Write(info.ManufacturerName)
+	binary.Write(buf, binary.LittleEndian, uint32(len(info.ModelName)))
+	buf.Write(info.ModelName)
+	binary.Write(buf, binary.LittleEndian, uint32(len(info.ModelNumber)))
+	buf.Write(info.ModelNumber)
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
+}
+
+func parseSilverlightInfo(data []byte) (*SilverlightInformation, error) {
+	info := &SilverlightInformation{
+		Data: make([]byte, len(data)),
+	}
+	copy(info.Data, data)
+	return info, nil
+}
+
+func serializeSilverlightInfo(buf *bytes.Buffer, info *SilverlightInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeSilverlight, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+	buf.Write(info.Data)
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
+}
+
+func parseMeteringInfo(data []byte) (*MeteringInformation, error) {
+	info := &MeteringInformation{
+		Data: make([]byte, len(data)),
+	}
+	copy(info.Data, data)
+	return info, nil
+}
+
+func serializeMeteringInfo(buf *bytes.Buffer, info *MeteringInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeMetering, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+	buf.Write(info.Data)
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
+}
+
+func parseExtDataSigKeyInfo(data []byte) (*ExtDataSigKeyInfo, error) {
+	if len(data) < 8 {
+		return nil, errors.New("ext data sig key info too short")
+	}
+
+	info := &ExtDataSigKeyInfo{}
+	info.KeyType = binary.LittleEndian.Uint16(data[0:])
+	info.KeyLength = binary.LittleEndian.Uint16(data[2:])
+
+	keyLen := binary.LittleEndian.Uint32(data[4:])
+	if keyLen > 0 && len(data) >= 8+int(keyLen) {
+		info.PublicKey = make([]byte, keyLen)
+		copy(info.PublicKey, data[8:8+keyLen])
+	}
+
+	return info, nil
+}
+
+func serializeExtDataSigKeyInfo(buf *bytes.Buffer, info *ExtDataSigKeyInfo) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeExtDataSigKey, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+
+	binary.Write(buf, binary.LittleEndian, info.KeyType)
+	binary.Write(buf, binary.LittleEndian, info.KeyLength)
+	binary.Write(buf, binary.LittleEndian, uint32(len(info.PublicKey)))
+	buf.Write(info.PublicKey)
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
+}
+
+func parseExtDataContainer(data []byte) (*ExtDataContainer, error) {
+	if len(data) < 4 {
+		return nil, errors.New("ext data container too short")
+	}
+
+	container := &ExtDataContainer{}
+	entryCount := binary.LittleEndian.Uint32(data[0:])
+	offset := 4
+
+	if entryCount > 100 {
+		return nil, errors.New("too many ext data entries")
+	}
+
+	container.Entries = make([]ExtDataEntry, entryCount)
+
+	for i := uint32(0); i < entryCount; i++ {
+		if offset+8 > len(data) {
+			break
+		}
+
+		entry := &container.Entries[i]
+		entry.Type = binary.LittleEndian.Uint32(data[offset:])
+		offset += 4
+
+		dataLen := binary.LittleEndian.Uint32(data[offset:])
+		offset += 4
+
+		if dataLen > 0 && offset+int(dataLen) <= len(data) {
+			entry.Data = make([]byte, dataLen)
+			copy(entry.Data, data[offset:offset+int(dataLen)])
+			offset += int(dataLen)
+		}
+	}
+
+	return container, nil
+}
+
+func serializeExtDataContainer(buf *bytes.Buffer, container *ExtDataContainer) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeExtDataContainer, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+
+	binary.Write(buf, binary.LittleEndian, uint32(len(container.Entries)))
+
+	for _, entry := range container.Entries {
+		binary.Write(buf, binary.LittleEndian, entry.Type)
+		binary.Write(buf, binary.LittleEndian, uint32(len(entry.Data)))
+		buf.Write(entry.Data)
+	}
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
+}
+
+func parseServerTypeInfo(data []byte) (*ServerTypeInformation, error) {
+	if len(data) < 4 {
+		return nil, errors.New("server type info too short")
+	}
+
+	return &ServerTypeInformation{
+		SecurityVersion: binary.LittleEndian.Uint32(data[0:]),
+	}, nil
+}
+
+func serializeServerTypeInfo(buf *bytes.Buffer, info *ServerTypeInformation) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, ObjTypeServerType, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
+
+	binary.Write(buf, binary.LittleEndian, info.SecurityVersion)
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
 }
 
 func parseSecurityVersion(data []byte) (*SecurityVersion, error) {
-   if len(data) < 8 {
-      return nil, errors.New("security version data too short")
-   }
-   return &SecurityVersion{
-      SecurityVersion: binary.LittleEndian.Uint32(data[0:]),
-      PlatformID:      binary.LittleEndian.Uint32(data[4:]),
-   }, nil
+	if len(data) < 8 {
+		return nil, errors.New("security version too short")
+	}
+
+	return &SecurityVersion{
+		MinimumSecurityLevel: binary.LittleEndian.Uint32(data[0:]),
+		MaximumSecurityLevel: binary.LittleEndian.Uint32(data[4:]),
+	}, nil
 }
 
-func serializeSecurityVersion(buf *bytes.Buffer, info *SecurityVersion) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeSecurityVer, 0)
-   binary.Write(buf, binary.LittleEndian, info.SecurityVersion)
-   binary.Write(buf, binary.LittleEndian, info.PlatformID)
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
-}
+func serializeSecurityVersion(buf *bytes.Buffer, info *SecurityVersion, objType uint16) error {
+	objStart := buf.Len()
+	lengthPos, err := writeObjHeader(buf, objType, FlagMustUnderstand)
+	if err != nil {
+		return err
+	}
 
-func serializeSecurityVersion2(buf *bytes.Buffer, info *SecurityVersion) error {
-   objStart := buf.Len()
-   lengthPos, _ := writeObjHeader(buf, ObjTypeSecurityVer2, 0)
-   binary.Write(buf, binary.LittleEndian, info.SecurityVersion)
-   binary.Write(buf, binary.LittleEndian, info.PlatformID)
-   updateObjLength(buf, lengthPos, objStart)
-   return nil
+	binary.Write(buf, binary.LittleEndian, info.MinimumSecurityLevel)
+	binary.Write(buf, binary.LittleEndian, info.MaximumSecurityLevel)
+
+	updateObjLength(buf, lengthPos, objStart)
+	return nil
 }

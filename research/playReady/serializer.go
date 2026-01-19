@@ -1,177 +1,133 @@
 package bcert
 
 import (
-   "bytes"
-   "encoding/binary"
-   "errors"
+	"bytes"
+	"encoding/binary"
 )
 
-func (c *Certificate) Serialize() ([]byte, error) {
-   var buf bytes.Buffer
+func (chain *CertificateChain) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, uint32(TagCHAI))
+	binary.Write(buf, binary.LittleEndian, chain.Header.Version)
+	cbChainPos := buf.Len()
+	binary.Write(buf, binary.LittleEndian, uint32(0))
+	binary.Write(buf, binary.LittleEndian, chain.Header.Flags)
+	binary.Write(buf, binary.LittleEndian, chain.Header.Certs)
 
-   headerStart := buf.Len()
-   binary.Write(&buf, binary.LittleEndian, c.HeaderData.Version)
-   lengthPos := buf.Len()
-   binary.Write(&buf, binary.LittleEndian, uint32(0))
-   signedLengthPos := buf.Len()
-   binary.Write(&buf, binary.LittleEndian, uint32(0))
+	for i := uint32(0); i < uint32(len(chain.CertHeaders)); i++ {
+		buf.Write(chain.CertHeaders[i].RawData)
+	}
 
-   type objToWrite struct {
-      objType uint16
-      flags   uint16
-      fn      func() error
-   }
-
-   objects := []objToWrite{}
-
-   if c.BasicInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeBasic, FlagMustUnderstand,
-         func() error { return serializeBasicInfo(&buf, c.BasicInformation) }})
-   }
-   if c.DomainInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeDomain, FlagMustUnderstand,
-         func() error { return serializeDomainInfo(&buf, c.DomainInformation) }})
-   }
-   if c.PCInfo != nil {
-      objects = append(objects, objToWrite{ObjTypePC, FlagMustUnderstand,
-         func() error { return serializePCInfo(&buf, c.PCInfo) }})
-   }
-   if c.DeviceInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeDevice, FlagMustUnderstand,
-         func() error { return serializeDeviceInfo(&buf, c.DeviceInformation) }})
-   }
-   if c.FeatureInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeFeature, FlagMustUnderstand,
-         func() error { return serializeFeatureInfo(&buf, c.FeatureInformation) }})
-   }
-   if c.KeyInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeKey, FlagMustUnderstand,
-         func() error { return serializeKeyInfo(&buf, c.KeyInformation) }})
-   }
-   if c.ManufacturerInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeManufacturer, 0,
-         func() error { return serializeManufacturerInfo(&buf, c.ManufacturerInformation) }})
-   }
-   if c.SilverlightInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeSilverlight, FlagMustUnderstand,
-         func() error { return serializeSilverlightInfo(&buf, c.SilverlightInformation) }})
-   }
-   if c.MeteringInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeMetering, FlagMustUnderstand,
-         func() error { return serializeMeteringInfo(&buf, c.MeteringInformation) }})
-   }
-   if c.ExDataSigKeyInfo != nil {
-      objects = append(objects, objToWrite{ObjTypeExtDataSigKey, 0,
-         func() error { return serializeExDataSigKeyInfo(&buf, c.ExDataSigKeyInfo) }})
-   }
-   if c.SecurityVersion != nil {
-      objects = append(objects, objToWrite{ObjTypeSecurityVer, 0,
-         func() error { return serializeSecurityVersion(&buf, c.SecurityVersion) }})
-   }
-   if c.SecurityVersion2 != nil {
-      objects = append(objects, objToWrite{ObjTypeSecurityVer2, 0,
-         func() error { return serializeSecurityVersion2(&buf, c.SecurityVersion2) }})
-   }
-   if c.ServerTypeInformation != nil {
-      objects = append(objects, objToWrite{ObjTypeServer, FlagMustUnderstand,
-         func() error { return serializeServerTypeInfo(&buf, c.ServerTypeInformation) }})
-   }
-   if c.ExDataContainer != nil {
-      objects = append(objects, objToWrite{ObjTypeExtDataContainer, FlagMustUnderstand | FlagContainer,
-         func() error { return serializeExtDataContainer(&buf, c.ExDataContainer) }})
-   }
-
-   for _, obj := range objects {
-      if err := obj.fn(); err != nil {
-         return nil, err
-      }
-   }
-
-   signedEnd := buf.Len()
-
-   if c.SignatureInformation != nil {
-      if err := serializeSignatureInfo(&buf, c.SignatureInformation); err != nil {
-         return nil, err
-      }
-   }
-
-   result := buf.Bytes()
-   binary.LittleEndian.PutUint32(result[lengthPos:], uint32(len(result)))
-   binary.LittleEndian.PutUint32(result[signedLengthPos:], uint32(signedEnd-headerStart))
-
-   return result, nil
+	cbChain := uint32(buf.Len())
+	binary.LittleEndian.PutUint32(buf.Bytes()[cbChainPos:], cbChain)
+	return buf.Bytes(), nil
 }
 
-func (c *CertificateChain) Serialize() ([]byte, error) {
-   var buf bytes.Buffer
+func (cert *Certificate) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, uint32(TagCERT))
+	binary.Write(buf, binary.LittleEndian, cert.Version)
+	cbCertPos := buf.Len()
+	binary.Write(buf, binary.LittleEndian, uint32(0))
+	signedLengthPos := buf.Len()
+	binary.Write(buf, binary.LittleEndian, uint32(0))
+	signedStart := buf.Len()
 
-   binary.Write(&buf, binary.LittleEndian, uint32(BcertChainHeaderTag))
-   binary.Write(&buf, binary.LittleEndian, c.Header.Version)
-   lengthPos := buf.Len()
-   binary.Write(&buf, binary.LittleEndian, uint32(0))
-   binary.Write(&buf, binary.LittleEndian, c.Header.Flags)
-   binary.Write(&buf, binary.LittleEndian, uint32(len(c.CertHeaders)))
+	if cert.BasicInformation != nil {
+		if err := serializeBasicInfo(buf, cert.BasicInformation); err != nil {
+			return nil, err
+		}
+	}
+	if cert.FeatureInformation != nil {
+		if err := serializeFeatureInfo(buf, cert.FeatureInformation); err != nil {
+			return nil, err
+		}
+	}
+	if cert.KeyInformation != nil {
+		if err := serializeKeyInfo(buf, cert.KeyInformation); err != nil {
+			return nil, err
+		}
+	}
+	if cert.DomainInformation != nil {
+		if err := serializeDomainInfo(buf, cert.DomainInformation); err != nil {
+			return nil, err
+		}
+	}
+	if cert.DeviceInformation != nil {
+		if err := serializeDeviceInfo(buf, cert.DeviceInformation); err != nil {
+			return nil, err
+		}
+	}
+	if cert.PCInfo != nil {
+		if err := serializePCInfo(buf, cert.PCInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.ManufacturerInfo != nil {
+		if err := serializeManufacturerInfo(buf, cert.ManufacturerInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.SilverlightInfo != nil {
+		if err := serializeSilverlightInfo(buf, cert.SilverlightInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.MeteringInfo != nil {
+		if err := serializeMeteringInfo(buf, cert.MeteringInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.ExtDataSigKeyInfo != nil {
+		if err := serializeExtDataSigKeyInfo(buf, cert.ExtDataSigKeyInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.ExtDataContainer != nil {
+		if err := serializeExtDataContainer(buf, cert.ExtDataContainer); err != nil {
+			return nil, err
+		}
+	}
+	if cert.ServerTypeInfo != nil {
+		if err := serializeServerTypeInfo(buf, cert.ServerTypeInfo); err != nil {
+			return nil, err
+		}
+	}
+	if cert.SecurityVersion != nil {
+		if err := serializeSecurityVersion(buf, cert.SecurityVersion, ObjTypeSecurityVersion); err != nil {
+			return nil, err
+		}
+	}
+	if cert.SecurityVersion2 != nil {
+		if err := serializeSecurityVersion(buf, cert.SecurityVersion2, ObjTypeSecurityVersion2); err != nil {
+			return nil, err
+		}
+	}
 
-   for _, certHdr := range c.CertHeaders {
-      buf.Write(certHdr.RawData)
-   }
+	signedEnd := buf.Len()
+	signedLength := uint32(signedEnd - signedStart)
+	binary.LittleEndian.PutUint32(buf.Bytes()[signedLengthPos:], signedLength)
 
-   result := buf.Bytes()
-   binary.LittleEndian.PutUint32(result[lengthPos:], uint32(len(result)))
-   return result, nil
+	if cert.SignatureInformation != nil {
+		if err := serializeSignatureInfo(buf, cert.SignatureInformation); err != nil {
+			return nil, err
+		}
+	}
+
+	cbCert := uint32(buf.Len())
+	binary.LittleEndian.PutUint32(buf.Bytes()[cbCertPos:], cbCert)
+	return buf.Bytes(), nil
 }
 
-func writeObjHeader(buf *bytes.Buffer, objType, flags uint16) (int, error) {
-   binary.Write(buf, binary.LittleEndian, flags)
-   binary.Write(buf, binary.LittleEndian, objType)
-   lengthPos := buf.Len()
-   binary.Write(buf, binary.LittleEndian, uint32(0))
-   return lengthPos, nil
+func writeObjHeader(buf *bytes.Buffer, objType uint16, flags uint16) (int, error) {
+	binary.Write(buf, binary.LittleEndian, objType)
+	binary.Write(buf, binary.LittleEndian, flags)
+	lengthPos := buf.Len()
+	binary.Write(buf, binary.LittleEndian, uint32(0))
+	return lengthPos, nil
 }
 
-func updateObjLength(buf *bytes.Buffer, lengthPos, objStart int) {
-   objLength := uint32(buf.Len() - objStart)
-   binary.LittleEndian.PutUint32(buf.Bytes()[lengthPos:], objLength)
-}
-
-func (c *Certificate) Verify() error {
-   if c.BasicInformation == nil {
-      return errors.New("missing basic information")
-   }
-   if c.KeyInformation == nil || c.KeyInformation.Entries == 0 {
-      return errors.New("missing key information")
-   }
-   if c.SignatureInformation == nil {
-      return errors.New("missing signature information")
-   }
-   if len(c.BasicInformation.DigestValue) != SHA256DigestSize {
-      return errors.New("invalid digest size")
-   }
-   return nil
-}
-
-func (c *Certificate) RoundTrip() error {
-   serialized, err := c.Serialize()
-   if err != nil {
-      return err
-   }
-   parsed, err := ParseCertificate(serialized)
-   if err != nil {
-      return err
-   }
-   if c.BasicInformation != nil && parsed.BasicInformation != nil {
-      if c.BasicInformation.CertID != parsed.BasicInformation.CertID {
-         return errors.New("CertID mismatch")
-      }
-   }
-   return nil
-}
-
-func (c *CertificateChain) RoundTrip() error {
-   serialized, err := c.Serialize()
-   if err != nil {
-      return err
-   }
-   _, err = ParseCertificateChain(serialized)
-   return err
+func updateObjLength(buf *bytes.Buffer, lengthPos int, objStart int) {
+	objLength := uint32(buf.Len() - objStart)
+	binary.LittleEndian.PutUint32(buf.Bytes()[lengthPos:], objLength)
 }

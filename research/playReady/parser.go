@@ -1,167 +1,213 @@
 package bcert
 
 import (
-   "encoding/binary"
-   "errors"
-   "fmt"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"log"
 )
 
 func ParseCertificate(data []byte) (*Certificate, error) {
-   if len(data) < 16 {
-      return nil, errors.New("certificate data too short")
-   }
+	log.Printf("ParseCertificate: data length = %d", len(data))
+	log.Printf("First 32 bytes: %x", data[:min(32, len(data))])
 
-   cert := &Certificate{RawData: data}
-   offset := 0
+	if len(data) < 16 {
+		return nil, errors.New("certificate data too short")
+	}
 
-   if len(data) >= 4 {
-      tag := binary.LittleEndian.Uint32(data[offset:])
-      if tag == BcertCertHeaderTag {
-         offset += 4
-      }
-   }
+	cert := &Certificate{}
+	offset := 0
 
-   if offset+12 > len(data) {
-      return nil, errors.New("certificate header incomplete")
-   }
+	tag := binary.BigEndian.Uint32(data[offset:])
+	log.Printf("Tag at offset %d: 0x%08X", offset, tag)
 
-   cert.HeaderData.Version = binary.LittleEndian.Uint32(data[offset:])
-   offset += 4
-   cert.HeaderData.Length = binary.LittleEndian.Uint32(data[offset:])
-   offset += 4
-   cert.HeaderData.SignedLength = binary.LittleEndian.Uint32(data[offset:])
-   offset += 4
+	if tag == TagCERT {
+		log.Printf("Found CERT tag, skipping")
+		offset += 4
+		cert.Version = binary.BigEndian.Uint32(data[offset:])
+		log.Printf("Version at offset %d: %d", offset, cert.Version)
+		offset += 4
+		cert.CbCert = binary.BigEndian.Uint32(data[offset:])
+		log.Printf("Length at offset %d: %d", offset, cert.CbCert)
+		offset += 4
+		cert.SignedLength = binary.BigEndian.Uint32(data[offset:])
+		log.Printf("SignedLength at offset %d: %d", offset, cert.SignedLength)
+		offset += 4
+	}
 
-   if cert.HeaderData.Length > uint32(len(data)) {
-      return nil, fmt.Errorf("invalid certificate length: %d > %d", cert.HeaderData.Length, len(data))
-   }
+	signedEnd := offset + int(cert.SignedLength)
 
-   signedEnd := int(cert.HeaderData.SignedLength)
-   if signedEnd > len(data) {
-      signedEnd = len(data)
-   }
+	for offset < len(data) {
+		if offset+8 > len(data) {
+			break
+		}
 
-   for offset < signedEnd && offset+ObjectHeaderLen <= len(data) {
-      _ = binary.LittleEndian.Uint16(data[offset:]) // objFlags
-      offset += 2
-      objType := binary.LittleEndian.Uint16(data[offset:])
-      offset += 2
-      objLength := binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
+		objType := binary.BigEndian.Uint16(data[offset:])
+		flags := binary.BigEndian.Uint16(data[offset+2:])
+		objLength := binary.BigEndian.Uint32(data[offset+4:])
 
-      objDataStart := offset
-      objDataEnd := objDataStart + int(objLength) - ObjectHeaderLen
+		log.Printf("Object at offset %d: type=0x%04X, length=%d", offset, objType, objLength)
 
-      if objDataEnd > len(data) {
-         return nil, fmt.Errorf("object type 0x%04X extends beyond data", objType)
-      }
+		dataStart := offset + 8
+		dataEnd := offset + int(objLength)
 
-      objData := data[objDataStart:objDataEnd]
-      var err error
+		if dataEnd > len(data) {
+			return nil, fmt.Errorf("object extends beyond data: %d > %d", dataEnd, len(data))
+		}
 
-      switch objType {
-      case ObjTypeBasic:
-         cert.BasicInformation, err = parseBasicInfo(objData)
-      case ObjTypeDomain:
-         cert.DomainInformation, err = parseDomainInfo(objData)
-      case ObjTypePC:
-         cert.PCInfo, err = parsePCInfo(objData)
-      case ObjTypeDevice:
-         cert.DeviceInformation, err = parseDeviceInfo(objData)
-      case ObjTypeFeature:
-         cert.FeatureInformation, err = parseFeatureInfo(objData)
-      case ObjTypeKey:
-         cert.KeyInformation, err = parseKeyInfo(objData)
-      case ObjTypeManufacturer:
-         cert.ManufacturerInformation, err = parseManufacturerInfo(objData)
-      case ObjTypeSignature:
-         cert.SignatureInformation, err = parseSignatureInfo(objData)
-      case ObjTypeSilverlight:
-         cert.SilverlightInformation, err = parseSilverlightInfo(objData)
-      case ObjTypeMetering:
-         cert.MeteringInformation, err = parseMeteringInfo(objData)
-      case ObjTypeExtDataSigKey:
-         cert.ExDataSigKeyInfo, err = parseExDataSigKeyInfo(objData)
-      case ObjTypeExtDataContainer:
-         cert.ExDataContainer, err = parseExtDataContainer(objData)
-      case ObjTypeServer:
-         cert.ServerTypeInformation, err = parseServerTypeInfo(objData)
-      case ObjTypeSecurityVer:
-         cert.SecurityVersion, err = parseSecurityVersion(objData)
-      case ObjTypeSecurityVer2:
-         cert.SecurityVersion2, err = parseSecurityVersion(objData)
-      }
+		objData := data[dataStart:dataEnd]
 
-      if err != nil {
-         return nil, fmt.Errorf("parsing object type 0x%04X: %w", objType, err)
-      }
-      offset = objDataEnd
-   }
+		var err error
+		switch objType {
+		case ObjTypeBasic:
+			cert.BasicInformation, err = parseBasicInfo(objData)
+		case ObjTypeFeature:
+			cert.FeatureInformation, err = parseFeatureInfo(objData)
+		case ObjTypeKey:
+			cert.KeyInformation, err = parseKeyInfo(objData)
+		case ObjTypeSignature:
+			cert.SignatureInformation, err = parseSignatureInfo(objData)
+		case ObjTypeDomain:
+			cert.DomainInformation, err = parseDomainInfo(objData)
+		case ObjTypeDevice:
+			cert.DeviceInformation, err = parseDeviceInfo(objData)
+		case ObjTypePC:
+			cert.PCInfo, err = parsePCInfo(objData)
+		case ObjTypeManufacturer:
+			cert.ManufacturerInfo, err = parseManufacturerInfo(objData)
+		case ObjTypeSilverlight:
+			cert.SilverlightInfo, err = parseSilverlightInfo(objData)
+		case ObjTypeMetering:
+			cert.MeteringInfo, err = parseMeteringInfo(objData)
+		case ObjTypeExtDataSigKey:
+			cert.ExtDataSigKeyInfo, err = parseExtDataSigKeyInfo(objData)
+		case ObjTypeExtDataContainer:
+			cert.ExtDataContainer, err = parseExtDataContainer(objData)
+		case ObjTypeServerType:
+			cert.ServerTypeInfo, err = parseServerTypeInfo(objData)
+		case ObjTypeSecurityVersion:
+			cert.SecurityVersion, err = parseSecurityVersion(objData)
+		case ObjTypeSecurityVersion2:
+			cert.SecurityVersion2, err = parseSecurityVersion(objData)
+		default:
+			log.Printf("Unknown object type 0x%04X at offset %d (flags=0x%04X)", objType, offset, flags)
+			if flags&FlagMustUnderstand != 0 {
+				return nil, fmt.Errorf("unknown must-understand object type 0x%04X", objType)
+			}
+		}
 
-   return cert, nil
+		if err != nil {
+			return nil, fmt.Errorf("parsing object type 0x%04X: %w", objType, err)
+		}
+
+		offset = dataEnd
+
+		if offset >= signedEnd && cert.SignatureInformation != nil {
+			break
+		}
+	}
+
+	return cert, nil
 }
 
 func ParseCertificateChain(data []byte) (*CertificateChain, error) {
-   if len(data) < 20 {
-      return nil, errors.New("data too short for certificate chain")
-   }
+	log.Printf("ParseCertificateChain: data length = %d", len(data))
+	log.Printf("First 32 bytes: %x", data[:min(32, len(data))])
 
-   chain := &CertificateChain{RawData: data}
-   offset := 0
+	if len(data) < 20 {
+		return nil, errors.New("chain data too short")
+	}
 
-   tag := binary.LittleEndian.Uint32(data[offset:])
-   if tag == BcertChainHeaderTag {
-      offset += 4
-      chain.Header.Version = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-      chain.Header.CbChain = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-      chain.Header.Flags = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-      chain.Header.Certs = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-   } else {
-      chain.Header.Version = BcertCurrentVersion
-      chain.Header.CbChain = uint32(len(data))
-      chain.Header.Flags = 0
-      chain.Header.Certs = 1
-   }
+	tag := binary.BigEndian.Uint32(data[0:])
+	log.Printf("Tag at offset 0: 0x%08X", tag)
 
-   if chain.Header.Certs > BcertMaxCertsPerChain {
-      return nil, fmt.Errorf("too many certificates: %d", chain.Header.Certs)
-   }
+	if tag != TagCHAI {
+		log.Printf("Not a chain, trying as single certificate")
+		cert, err := ParseCertificate(data)
+		if err != nil {
+			return nil, err
+		}
+		serialized, err := cert.Serialize()
+		if err != nil {
+			return nil, err
+		}
+		return &CertificateChain{
+			Header: ChainHeader{
+				Version: 1,
+				CbChain: uint32(len(serialized) + 20),
+				Flags:   0,
+				Certs:   1,
+			},
+			CertHeaders: []CertificateHeader{
+				{
+					Version:      cert.Version,
+					CbCert:       cert.CbCert,
+					SignedLength: cert.SignedLength,
+					RawData:      serialized,
+				},
+			},
+		}, nil
+	}
 
-   chain.CertHeaders = make([]CertHeader, chain.Header.Certs)
-   chain.Expiration = 0xFFFFFFFF
+	log.Printf("Found CHAI tag - parsing as chain")
 
-   for i := uint32(0); i < chain.Header.Certs; i++ {
-      certStart := offset
-      if offset+4 <= len(data) && binary.LittleEndian.Uint32(data[offset:]) == BcertCertHeaderTag {
-         offset += 4
-      }
+	chain := &CertificateChain{}
+	chain.Header.Version = binary.BigEndian.Uint32(data[4:])
+	chain.Header.CbChain = binary.BigEndian.Uint32(data[8:])
+	chain.Header.Flags = binary.BigEndian.Uint32(data[12:])
+	chain.Header.Certs = binary.BigEndian.Uint32(data[16:])
 
-      if offset+12 > len(data) {
-         return nil, fmt.Errorf("certificate %d header incomplete", i)
-      }
+	log.Printf("Chain header: version=%d, cbChain=%d, flags=0x%08X, certs=%d",
+		chain.Header.Version, chain.Header.CbChain, chain.Header.Flags, chain.Header.Certs)
 
-      hdr := &chain.CertHeaders[i]
-      hdr.Index = i
-      hdr.Offset = uint32(certStart)
-      hdr.HeaderData.Version = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-      hdr.HeaderData.Length = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
-      hdr.HeaderData.SignedLength = binary.LittleEndian.Uint32(data[offset:])
-      offset += 4
+	offset := 20
+	chain.CertHeaders = make([]CertificateHeader, chain.Header.Certs)
 
-      certEnd := certStart + int(hdr.HeaderData.Length)
-      if certEnd > len(data) {
-         return nil, fmt.Errorf("certificate %d extends beyond data", i)
-      }
+	for i := uint32(0); i < chain.Header.Certs; i++ {
+		if offset+16 > len(data) {
+			return nil, fmt.Errorf("certificate %d: header truncated", i)
+		}
 
-      hdr.RawData = data[certStart:certEnd]
-      offset = certEnd
-   }
+		log.Printf("Parsing certificate %d at offset %d", i, offset)
 
-   return chain, nil
+		certTag := binary.BigEndian.Uint32(data[offset:])
+		if certTag != TagCERT {
+			return nil, fmt.Errorf("certificate %d: invalid tag 0x%08X", i, certTag)
+		}
+		log.Printf("Found CERT tag at offset %d", offset)
+
+		certHeader := &chain.CertHeaders[i]
+		certHeader.Version = binary.BigEndian.Uint32(data[offset+4:])
+		certHeader.CbCert = binary.BigEndian.Uint32(data[offset+8:])
+		certHeader.SignedLength = binary.BigEndian.Uint32(data[offset+12:])
+
+		log.Printf("Certificate %d: version=%d, length=%d, signedLength=%d",
+			i, certHeader.Version, certHeader.CbCert, certHeader.SignedLength)
+
+		certEnd := offset + int(certHeader.CbCert)
+		if certEnd > len(data) {
+			return nil, fmt.Errorf("certificate %d: extends beyond data", i)
+		}
+
+		certHeader.RawData = make([]byte, certHeader.CbCert)
+		copy(certHeader.RawData, data[offset:certEnd])
+
+		offset = certEnd
+	}
+
+	return chain, nil
+}
+
+func (chain *CertificateChain) GetCertificate(index uint32) (*Certificate, error) {
+	if index >= chain.Header.Certs {
+		return nil, errors.New("certificate index out of range")
+	}
+	return ParseCertificate(chain.CertHeaders[index].RawData)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
