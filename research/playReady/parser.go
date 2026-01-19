@@ -1,199 +1,167 @@
-package playready
+package bcert
 
 import (
+   "encoding/binary"
+   "errors"
    "fmt"
-   "io"
 )
 
-func parseChain(chain *Chain) error {
-   r := newReader(chain.RawData)
-   chain.Header = &ChainExtendedHeader{}
-
-   headerTag, err := r.ReadUint32()
-   if err != nil || headerTag != ChainHeaderTag {
-      return ErrInvalidChainHeader
-   }
-   chain.Header.Version, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-   chain.Header.Length, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-   chain.Header.Flags, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-   chain.Header.Certs, err = r.ReadUint32()
-   if err != nil {
-      return err
+func ParseCertificate(data []byte) (*Certificate, error) {
+   if len(data) < 16 {
+      return nil, errors.New("certificate data too short")
    }
 
-   chain.Certificates = make([]*Cert, 0, chain.Header.Certs)
-   offset := 20 // Size of chain header
+   cert := &Certificate{RawData: data}
+   offset := 0
+
+   if len(data) >= 4 {
+      tag := binary.LittleEndian.Uint32(data[offset:])
+      if tag == BcertCertHeaderTag {
+         offset += 4
+      }
+   }
+
+   if offset+12 > len(data) {
+      return nil, errors.New("certificate header incomplete")
+   }
+
+   cert.HeaderData.Version = binary.LittleEndian.Uint32(data[offset:])
+   offset += 4
+   cert.HeaderData.Length = binary.LittleEndian.Uint32(data[offset:])
+   offset += 4
+   cert.HeaderData.SignedLength = binary.LittleEndian.Uint32(data[offset:])
+   offset += 4
+
+   if cert.HeaderData.Length > uint32(len(data)) {
+      return nil, fmt.Errorf("invalid certificate length: %d > %d", cert.HeaderData.Length, len(data))
+   }
+
+   signedEnd := int(cert.HeaderData.SignedLength)
+   if signedEnd > len(data) {
+      signedEnd = len(data)
+   }
+
+   for offset < signedEnd && offset+ObjectHeaderLen <= len(data) {
+      _ = binary.LittleEndian.Uint16(data[offset:]) // objFlags
+      offset += 2
+      objType := binary.LittleEndian.Uint16(data[offset:])
+      offset += 2
+      objLength := binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+
+      objDataStart := offset
+      objDataEnd := objDataStart + int(objLength) - ObjectHeaderLen
+
+      if objDataEnd > len(data) {
+         return nil, fmt.Errorf("object type 0x%04X extends beyond data", objType)
+      }
+
+      objData := data[objDataStart:objDataEnd]
+      var err error
+
+      switch objType {
+      case ObjTypeBasic:
+         cert.BasicInformation, err = parseBasicInfo(objData)
+      case ObjTypeDomain:
+         cert.DomainInformation, err = parseDomainInfo(objData)
+      case ObjTypePC:
+         cert.PCInfo, err = parsePCInfo(objData)
+      case ObjTypeDevice:
+         cert.DeviceInformation, err = parseDeviceInfo(objData)
+      case ObjTypeFeature:
+         cert.FeatureInformation, err = parseFeatureInfo(objData)
+      case ObjTypeKey:
+         cert.KeyInformation, err = parseKeyInfo(objData)
+      case ObjTypeManufacturer:
+         cert.ManufacturerInformation, err = parseManufacturerInfo(objData)
+      case ObjTypeSignature:
+         cert.SignatureInformation, err = parseSignatureInfo(objData)
+      case ObjTypeSilverlight:
+         cert.SilverlightInformation, err = parseSilverlightInfo(objData)
+      case ObjTypeMetering:
+         cert.MeteringInformation, err = parseMeteringInfo(objData)
+      case ObjTypeExtDataSigKey:
+         cert.ExDataSigKeyInfo, err = parseExDataSigKeyInfo(objData)
+      case ObjTypeExtDataContainer:
+         cert.ExDataContainer, err = parseExtDataContainer(objData)
+      case ObjTypeServer:
+         cert.ServerTypeInformation, err = parseServerTypeInfo(objData)
+      case ObjTypeSecurityVer:
+         cert.SecurityVersion, err = parseSecurityVersion(objData)
+      case ObjTypeSecurityVer2:
+         cert.SecurityVersion2, err = parseSecurityVersion(objData)
+      }
+
+      if err != nil {
+         return nil, fmt.Errorf("parsing object type 0x%04X: %w", objType, err)
+      }
+      offset = objDataEnd
+   }
+
+   return cert, nil
+}
+
+func ParseCertificateChain(data []byte) (*CertificateChain, error) {
+   if len(data) < 20 {
+      return nil, errors.New("data too short for certificate chain")
+   }
+
+   chain := &CertificateChain{RawData: data}
+   offset := 0
+
+   tag := binary.LittleEndian.Uint32(data[offset:])
+   if tag == BcertChainHeaderTag {
+      offset += 4
+      chain.Header.Version = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+      chain.Header.CbChain = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+      chain.Header.Flags = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+      chain.Header.Certs = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+   } else {
+      chain.Header.Version = BcertCurrentVersion
+      chain.Header.CbChain = uint32(len(data))
+      chain.Header.Flags = 0
+      chain.Header.Certs = 1
+   }
+
+   if chain.Header.Certs > BcertMaxCertsPerChain {
+      return nil, fmt.Errorf("too many certificates: %d", chain.Header.Certs)
+   }
+
+   chain.CertHeaders = make([]CertHeader, chain.Header.Certs)
+   chain.Expiration = 0xFFFFFFFF
+
    for i := uint32(0); i < chain.Header.Certs; i++ {
-      if offset >= len(chain.RawData) {
-         return ErrUnexpectedEndOfData
-      }
-      certData := chain.RawData[offset:]
-      cert := &Cert{RawData: certData}
-      if err := parseCert(cert); err != nil {
-         return fmt.Errorf("parsing certificate %d: %w", i, err)
-      }
-      chain.Certificates = append(chain.Certificates, cert)
-      // Correct the raw data slice to be a view only of this certificate's data
-      cert.RawData = chain.RawData[offset : offset+int(cert.Header.Length)]
-      offset += int(cert.Header.Length)
-   }
-   return nil
-}
-
-func parseCert(cert *Cert) error {
-   r := newReader(cert.RawData)
-   cert.Header = &ExtendedHeader{}
-
-   headerTag, err := r.ReadUint32()
-   if err != nil || headerTag != CertHeaderTag {
-      return ErrInvalidCertHeader
-   }
-   cert.Header.Version, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-   cert.Header.Length, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-   cert.Header.SignedLength, err = r.ReadUint32()
-   if err != nil {
-      return err
-   }
-
-   if len(cert.RawData) < int(cert.Header.Length) {
-      return ErrObjectTooLarge
-   }
-   objectsData := cert.RawData[16:cert.Header.Length]
-   return unmarshalObjects(objectsData, cert)
-}
-
-func unmarshalObjects(data []byte, cert *Cert) error {
-   r := newReader(data)
-   for r.Len() > 8 { // Minimum object header size is 8
-      objType, flags, length, err := readObjectHeader(r)
-      if err != nil {
-         return err
-      }
-      objData, err := r.ReadBytes(int(length))
-      if err != nil {
-         return err
+      certStart := offset
+      if offset+4 <= len(data) && binary.LittleEndian.Uint32(data[offset:]) == BcertCertHeaderTag {
+         offset += 4
       }
 
-      err = assignObjectToCert(cert, objType, objData)
-      if err != nil {
-         if err == ErrUnknownObjectType { // If it's unknown, store it.
-            cert.UnknownObjects = append(cert.UnknownObjects, &UnknownObject{objType, flags, objData})
-         } else {
-            return fmt.Errorf("unmarshaling object type 0x%04X: %w", objType, err)
-         }
+      if offset+12 > len(data) {
+         return nil, fmt.Errorf("certificate %d header incomplete", i)
       }
 
-      // Align to 4-byte boundary for the next object
-      padding := (4 - (length % 4)) % 4
-      if r.Len() >= int(padding) {
-         _, _ = r.Seek(int64(padding), io.SeekCurrent)
+      hdr := &chain.CertHeaders[i]
+      hdr.Index = i
+      hdr.Offset = uint32(certStart)
+      hdr.HeaderData.Version = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+      hdr.HeaderData.Length = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+      hdr.HeaderData.SignedLength = binary.LittleEndian.Uint32(data[offset:])
+      offset += 4
+
+      certEnd := certStart + int(hdr.HeaderData.Length)
+      if certEnd > len(data) {
+         return nil, fmt.Errorf("certificate %d extends beyond data", i)
       }
-   }
-   return nil
-}
 
-func readObjectHeader(r *reader) (objType uint16, flags uint16, length uint32, err error) {
-   objType, err = r.ReadUint16()
-   if err != nil {
-      return
-   }
-   flags, err = r.ReadUint16()
-   if err != nil {
-      return
-   }
-   length, err = r.ReadUint32()
-   if err != nil {
-      return
-   }
-   return
-}
-
-func assignObjectToCert(cert *Cert, objType uint16, data []byte) error {
-   var unmarshalFunc func([]byte) error
-
-   switch objType {
-   case ObjTypeBasic:
-      cert.BasicInformation = new(BasicInfo)
-      unmarshalFunc = cert.BasicInformation.UnmarshalBinary
-   case ObjTypeKey:
-      cert.KeyInformation = new(KeyInfo)
-      unmarshalFunc = cert.KeyInformation.UnmarshalBinary
-   case ObjTypeSignature:
-      cert.SignatureInformation = new(SignatureInfo)
-      unmarshalFunc = cert.SignatureInformation.UnmarshalBinary
-   case ObjTypeManufacturer:
-      cert.ManufacturerInformation = new(ManufacturerInfo)
-      unmarshalFunc = cert.ManufacturerInformation.UnmarshalBinary
-   case ObjTypeFeature:
-      cert.FeatureInformation = new(FeatureInfo)
-      unmarshalFunc = cert.FeatureInformation.UnmarshalBinary
-   case ObjTypeDomain:
-      cert.DomainInformation = new(DomainInfo)
-      unmarshalFunc = cert.DomainInformation.UnmarshalBinary
-   case ObjTypePC:
-      cert.PCInfo = new(PCInfo)
-      unmarshalFunc = cert.PCInfo.UnmarshalBinary
-   case ObjTypeDevice:
-      cert.DeviceInfo = new(DeviceInfo)
-      unmarshalFunc = cert.DeviceInfo.UnmarshalBinary
-   case ObjTypeSilverlight:
-      cert.SilverlightInformation = new(SilverlightInfo)
-      unmarshalFunc = cert.SilverlightInformation.UnmarshalBinary
-   case ObjTypeMetering:
-      cert.MeteringInformation = new(MeteringInfo)
-      unmarshalFunc = cert.MeteringInformation.UnmarshalBinary
-   case ObjTypeExtDataContainer:
-      cert.ExDataContainer = new(ExtendedDataContainer)
-      unmarshalFunc = cert.ExDataContainer.UnmarshalBinary
-   case ObjTypeExtDataSignKey:
-      cert.ExDataSigKeyInfo = new(ExDataSigKeyInfo)
-      unmarshalFunc = cert.ExDataSigKeyInfo.UnmarshalBinary
-   case ObjTypeServer:
-      cert.ServerTypeInformation = new(ServerTypeInfo)
-      unmarshalFunc = cert.ServerTypeInformation.UnmarshalBinary
-   case ObjTypeSecurityVersion:
-      cert.SecurityVersion = new(SecurityVersion)
-      unmarshalFunc = cert.SecurityVersion.UnmarshalBinary
-   case ObjTypeSecurityVersion2:
-      cert.SecurityVersion2 = new(SecurityVersion2)
-      unmarshalFunc = cert.SecurityVersion2.UnmarshalBinary
-   default:
-      return ErrUnknownObjectType // Signal to caller to handle as unknown
+      hdr.RawData = data[certStart:certEnd]
+      offset = certEnd
    }
 
-   // The nil check that was here is unreachable because of the default
-   // case in the switch above, so it has been removed.
-
-   return unmarshalFunc(data)
-}
-
-func assignObjectToContainer(container *ExtendedDataContainer, objType uint16, data []byte) error {
-   var err error
-   switch objType {
-   case ObjTypeExtDataHWID:
-      container.HwidRecord = new(HWID)
-      err = container.HwidRecord.UnmarshalBinary(data)
-   case ObjTypeExtDataSignature:
-      container.ExDataSignatureInformation = new(ExtDataSigInfo)
-      err = container.ExDataSignatureInformation.UnmarshalBinary(data)
-   default:
-      unk := &UnknownObject{ObjectType: objType, Data: data}
-      container.ExtendedData = append(container.ExtendedData, unk)
-   }
-   return err
+   return chain, nil
 }
