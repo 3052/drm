@@ -17,6 +17,109 @@ import (
    "slices"
 )
 
+func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
+   cipherData, err := c.cipherData()
+   if err != nil {
+      return nil, err
+   }
+   la, err := newLa(cipherData, kid)
+   if err != nil {
+      return nil, err
+   }
+   laData, err := la.Marshal()
+   if err != nil {
+      return nil, err
+   }
+   laDigest := sha256.Sum256(laData)
+   signedInfo := xml.SignedInfo{
+      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+      Reference: xml.Reference{
+         Uri:         "#SignedData",
+         DigestValue: laDigest[:],
+      },
+   }
+   signedData, err := signedInfo.Marshal()
+   if err != nil {
+      return nil, err
+   }
+   hashVal := sha256.Sum256(signedData)
+   signature, err := sign(hashVal[:], privK)
+   if err != nil {
+      return nil, err
+   }
+   envelope := xml.Envelope{
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
+      Body: xml.Body{
+         AcquireLicense: &xml.AcquireLicense{
+            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
+            Challenge: xml.Challenge{
+               Challenge: xml.InnerChallenge{
+                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
+                  La:    la,
+                  Signature: xml.Signature{
+                     SignedInfo:     signedInfo,
+                     SignatureValue: signature,
+                  },
+               },
+            },
+         },
+      },
+   }
+   return envelope.Marshal()
+}
+
+func newLa(cipherData, kid []byte) (*xml.La, error) {
+   data, err := elGamalEncrypt(&p256().G, wmrmPublicKey())
+   if err != nil {
+      return nil, err
+   }
+   la := xml.La{
+      XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
+      Id:      "SignedData",
+      Version: "1",
+      ContentHeader: xml.ContentHeader{
+         WrmHeader: xml.WrmHeader{
+            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
+            Version: "4.0.0.0",
+            Data: xml.WrmHeaderData{
+               ProtectInfo: xml.ProtectInfo{
+                  KeyLen: "16",
+                  AlgId:  "AESCTR",
+               },
+               Kid: kid, // FIXME field can be a slice
+            },
+         },
+      },
+      EncryptedData: xml.EncryptedData{
+         XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+         Type:  "http://www.w3.org/2001/04/xmlenc#Element",
+         EncryptionMethod: xml.Algorithm{
+            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+         },
+         KeyInfo: xml.KeyInfo{
+            XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+            EncryptedKey: xml.EncryptedKey{
+               XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+               EncryptionMethod: xml.Algorithm{
+                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
+               },
+               KeyInfo: xml.EncryptedKeyInfo{
+                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
+                  KeyName: "WMRMServer",
+               },
+               CipherData: xml.CipherData{
+                  CipherValue: data,
+               },
+            },
+         },
+         CipherData: xml.CipherData{
+            CipherValue: cipherData,
+         },
+      },
+   }
+   return &la, nil
+}
+
 func (c *Chain) cipherData() ([]byte, error) {
    var coord CoordX
    coord.New(p256().G.X)
@@ -103,108 +206,6 @@ func (c *Chain) verify() (bool, error) {
       modelBase = c.Certificates[i].KeyInfo.Keys[0].PublicKey[:]
    }
    return true, nil
-}
-func newLa(cipherData, kid []byte) (*xml.La, error) {
-   data, err := elGamalEncrypt(&p256().G, wmrmPublicKey())
-   if err != nil {
-      return nil, err
-   }
-   la := xml.La{
-      XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
-      Id:      "SignedData",
-      Version: "1",
-      ContentHeader: xml.ContentHeader{
-         WrmHeader: xml.WrmHeader{
-            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
-            Version: "4.0.0.0",
-            Data: xml.WrmHeaderData{
-               ProtectInfo: xml.ProtectInfo{
-                  KeyLen: "16",
-                  AlgId:  "AESCTR",
-               },
-               Kid: kid, // FIXME field can be a slice
-            },
-         },
-      },
-      EncryptedData: xml.EncryptedData{
-         XmlNs: "http://www.w3.org/2001/04/xmlenc#",
-         Type:  "http://www.w3.org/2001/04/xmlenc#Element",
-         EncryptionMethod: xml.Algorithm{
-            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
-         },
-         KeyInfo: xml.KeyInfo{
-            XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-            EncryptedKey: xml.EncryptedKey{
-               XmlNs: "http://www.w3.org/2001/04/xmlenc#",
-               EncryptionMethod: xml.Algorithm{
-                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
-               },
-               KeyInfo: xml.EncryptedKeyInfo{
-                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
-                  KeyName: "WMRMServer",
-               },
-               CipherData: xml.CipherData{
-                  CipherValue: data,
-               },
-            },
-         },
-         CipherData: xml.CipherData{
-            CipherValue: cipherData,
-         },
-      },
-   }
-   return &la, nil
-}
-
-func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
-   cipherData, err := c.cipherData()
-   if err != nil {
-      return nil, err
-   }
-   la, err := newLa(cipherData, kid)
-   if err != nil {
-      return nil, err
-   }
-   laData, err := la.Marshal()
-   if err != nil {
-      return nil, err
-   }
-   laDigest := sha256.Sum256(laData)
-   signedInfo := xml.SignedInfo{
-      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-      Reference: xml.Reference{
-         Uri:         "#SignedData",
-         DigestValue: laDigest[:],
-      },
-   }
-   signedData, err := signedInfo.Marshal()
-   if err != nil {
-      return nil, err
-   }
-   hashVal := sha256.Sum256(signedData)
-   signature, err := sign(hashVal[:], privK)
-   if err != nil {
-      return nil, err
-   }
-   envelope := xml.Envelope{
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
-      Body: xml.Body{
-         AcquireLicense: &xml.AcquireLicense{
-            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
-            Challenge: xml.Challenge{
-               Challenge: xml.InnerChallenge{
-                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
-                  La:    la,
-                  Signature: xml.Signature{
-                     SignedInfo:     signedInfo,
-                     SignatureValue: signature,
-                  },
-               },
-            },
-         },
-      },
-   }
-   return envelope.Marshal()
 }
 
 // they downgrade certs from the cert digest (hash of the signing key)

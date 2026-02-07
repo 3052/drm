@@ -177,7 +177,7 @@ var key_tests = []struct {
          return err
       },
    },
-}[:1]
+}
 
 func post(req *http.Request) ([]byte, error) {
    req.Header.Set("content-type", "text/xml")
