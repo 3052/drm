@@ -13,50 +13,6 @@ import (
    "testing"
 )
 
-var device = SL2000
-
-func TestLeaf(t *testing.T) {
-   data, err := os.ReadFile(device.folder + device.g1)
-   if err != nil {
-      t.Fatal(err)
-   }
-   var certificate Chain
-   err = certificate.Decode(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = os.ReadFile(device.folder + device.z1)
-   if err != nil {
-      t.Fatal(err)
-   }
-   z1 := new(big.Int).SetBytes(data)
-   encrypt_sign_key := big.NewInt(1)
-   err = certificate.Leaf(z1, encrypt_sign_key)
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(device.folder+"EncryptSignKey", encrypt_sign_key.Bytes())
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(device.folder+"CertificateChain", certificate.Encode())
-   if err != nil {
-      t.Fatal(err)
-   }
-}
-
-type device_config struct {
-   folder string
-   g1     string
-   z1     string
-}
-
-var SL2000 = device_config{
-   folder: "ignore/",
-   g1:     "g1",
-   z1:     "z1",
-}
-
 func TestKey(t *testing.T) {
    log.SetFlags(log.Ltime)
    data, err := os.ReadFile(device.folder + "CertificateChain")
@@ -243,4 +199,47 @@ func post(req *http.Request) ([]byte, error) {
 func write_file(name string, data []byte) error {
    log.Println("WriteFile", name)
    return os.WriteFile(name, data, os.ModePerm)
+}
+var device = SL2000
+
+func TestLeaf(t *testing.T) {
+   data, err := os.ReadFile(device.folder + device.g1)
+   if err != nil {
+      t.Fatal(err)
+   }
+   var certificate Chain
+   err = certificate.Decode(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = os.ReadFile(device.folder + device.z1)
+   if err != nil {
+      t.Fatal(err)
+   }
+   z1 := new(big.Int).SetBytes(data)
+   encrypt_sign_key := big.NewInt(1)
+   err = certificate.Leaf(z1, encrypt_sign_key)
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(device.folder+"EncryptSignKey", encrypt_sign_key.Bytes())
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(device.folder+"CertificateChain", certificate.Encode())
+   if err != nil {
+      t.Fatal(err)
+   }
+}
+
+type device_config struct {
+   folder string
+   g1     string
+   z1     string
+}
+
+var SL2000 = device_config{
+   folder: "ignore/",
+   g1:     "g1",
+   z1:     "z1",
 }

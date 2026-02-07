@@ -24,4 +24,6 @@ then:
 
 1. edge://flags
 2. search DRM
-3. bitmovin.com/demos/drm
+3. Widevine DRM
+   - disabled
+4. bitmovin.com/demos/drm
