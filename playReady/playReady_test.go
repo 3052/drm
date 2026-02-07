@@ -1,6 +1,7 @@
 package playReady
 
 import (
+   "41.neocities.org/drm/playReady/xml"
    "bytes"
    "encoding/hex"
    "errors"
@@ -39,7 +40,14 @@ func TestKey(t *testing.T) {
          t.Fatal(err)
       }
       UuidOrGuid(kid)
-      data, err = certificate.RequestBody(kid, encrypt_sign_key)
+      header := xml.WrmHeaderData{
+         ProtectInfo: xml.ProtectInfo{
+            KeyLen: "16",
+            AlgId:  "AESCTR",
+         },
+         Kid: kid, // FIXME field can be a slice
+      }
+      data, err = certificate.RequestBody(&header, encrypt_sign_key)
       if err != nil {
          t.Fatal(err)
       }

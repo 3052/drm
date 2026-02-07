@@ -17,12 +17,12 @@ import (
    "slices"
 )
 
-func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
+func (c *Chain) RequestBody(header *xml.WrmHeaderData, privK *big.Int) ([]byte, error) {
    cipherData, err := c.cipherData()
    if err != nil {
       return nil, err
    }
-   la, err := newLa(cipherData, kid)
+   la, err := newLa(cipherData, header)
    if err != nil {
       return nil, err
    }
@@ -68,7 +68,7 @@ func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
    return envelope.Marshal()
 }
 
-func newLa(cipherData, kid []byte) (*xml.La, error) {
+func newLa(cipherData []byte, header *xml.WrmHeaderData) (*xml.La, error) {
    data, err := elGamalEncrypt(&p256().G, wmrmPublicKey())
    if err != nil {
       return nil, err
@@ -81,13 +81,7 @@ func newLa(cipherData, kid []byte) (*xml.La, error) {
          WrmHeader: xml.WrmHeader{
             XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
             Version: "4.0.0.0",
-            Data: xml.WrmHeaderData{
-               ProtectInfo: xml.ProtectInfo{
-                  KeyLen: "16",
-                  AlgId:  "AESCTR",
-               },
-               Kid: kid, // FIXME field can be a slice
-            },
+            Data: header,
          },
       },
       EncryptedData: xml.EncryptedData{

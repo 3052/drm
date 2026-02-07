@@ -6,9 +6,20 @@ import (
    "errors"
 )
 
+type CustomAttributes struct {
+   ContentId string `xml:"CONTENT_ID"`
+}
+
 type WrmHeaderData struct {
-   ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
-   Kid         Bytes       `xml:"KID"` // FIXME this can be a slice
+   CustomAttributes CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
+   Kid              Bytes            `xml:"KID"` // FIXME this can be a slice
+   ProtectInfo      ProtectInfo      `xml:"PROTECTINFO"`
+}
+
+type WrmHeader struct {
+   XmlNs   string         `xml:"xmlns,attr"`
+   Version string         `xml:"version,attr"`
+   Data    *WrmHeaderData `xml:"DATA"`
 }
 
 type Data struct {
@@ -177,10 +188,4 @@ func (s *SignedInfo) Marshal() ([]byte, error) {
 type SignedInfo struct {
    XmlNs     string `xml:"xmlns,attr"`
    Reference Reference
-}
-
-type WrmHeader struct {
-   XmlNs   string        `xml:"xmlns,attr"`
-   Version string        `xml:"version,attr"`
-   Data    WrmHeaderData `xml:"DATA"`
 }
