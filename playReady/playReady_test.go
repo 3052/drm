@@ -208,6 +208,7 @@ func write_file(name string, data []byte) error {
    log.Println("WriteFile", name)
    return os.WriteFile(name, data, os.ModePerm)
 }
+
 var device = SL2000
 
 func TestLeaf(t *testing.T) {

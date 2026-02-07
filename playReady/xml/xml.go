@@ -7,19 +7,38 @@ import (
 )
 
 type CustomAttributes struct {
-   ContentId string `xml:"CONTENT_ID"`
-}
-
-type WrmHeaderData struct {
-   CustomAttributes CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
-   Kid              Bytes            `xml:"KID"` // FIXME this can be a slice
-   ProtectInfo      ProtectInfo      `xml:"PROTECTINFO"`
+   XmlNs       string `xml:"xmlns,attr"`
+   ContentId   string `xml:"CONTENT_ID,omitempty"`
+   ContentZone string `xml:"CONTENT_ZONE,omitempty"`
+   Pbs         string `xml:"PBS,omitempty"`
 }
 
 type WrmHeader struct {
    XmlNs   string         `xml:"xmlns,attr"`
    Version string         `xml:"version,attr"`
    Data    *WrmHeaderData `xml:"DATA"`
+}
+
+type Kid struct {
+   AlgId string `xml:"ALGID,attr,omitempty"`
+   Value Bytes  `xml:"VALUE,attr"`
+}
+
+type WrmHeaderData struct {
+   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
+   LaUrl            string            `xml:"LA_URL,omitempty"`
+   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
+   Kid              Bytes             `xml:"KID,omitempty"`
+}
+
+type ProtectInfo struct {
+   Kids   *Kids  `xml:"KIDS,omitempty"`
+   AlgId  string `xml:"ALGID,omitempty"`
+   KeyLen int    `xml:"KEYLEN,omitempty"`
+}
+
+type Kids struct {
+   Kid Kid `xml:"KID"`
 }
 
 type Data struct {
@@ -174,11 +193,6 @@ type EncryptedKeyInfo struct { // Renamed from KeyInfo
 
 func (l *La) Marshal() ([]byte, error) {
    return xml.Marshal(l)
-}
-
-type ProtectInfo struct {
-   KeyLen string `xml:"KEYLEN"`
-   AlgId  string `xml:"ALGID"`
 }
 
 func (s *SignedInfo) Marshal() ([]byte, error) {
