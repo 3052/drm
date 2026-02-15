@@ -6,8 +6,8 @@ github.com/arnaucube/cryptofun v0.0.0-20190603183703-df33a4bbd574/go.mod h1:/B6F
 github.com/arnaucube/go-snark v0.0.0-20181207210027-19f7216d0e3d/go.mod h1:gLycS/B43DufBaH0jH8kqiE4A7w5FdOM8I9S416xh2Y=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/emmansun/gmsm v0.40.0 h1:OCV9XdRRIqe5en+vJMUgd4fxPfyrtzz9sNUnSWyPjUg=
-github.com/emmansun/gmsm v0.40.0/go.mod h1:BJlUp/h2uLj1i9yaGOIO5nUrnDsEmkwKW1ybFMGoRdw=
+github.com/emmansun/gmsm v0.41.0 h1:F8F0HPhKAkiD3ZLcSNECVTIMLPcmVMCHJOr2F3NiEiU=
+github.com/emmansun/gmsm v0.41.0/go.mod h1:EpQkChC2hxFAutJRbVNDGybWOVA0YGnfldnAfFG7F2M=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=

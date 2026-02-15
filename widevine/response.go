@@ -1,6 +1,7 @@
 package widevine
 
 import (
+   "41.neocities.org/protobuf"
    "bytes"
    "crypto/aes"
    "crypto/cipher"
@@ -9,11 +10,21 @@ import (
    "encoding/binary"
    "errors"
    "fmt"
-
-   "41.neocities.org/protobuf"
    "github.com/emmansun/gmsm/cbcmac"
    "github.com/emmansun/gmsm/padding"
 )
+
+// GetKey searches for a key by its ID in a slice of KeyContainers.
+// If the key is found, it returns the key and a nil error.
+// If the key is not found, it returns nil and an error.
+func GetKey(keys []*KeyContainer, id []byte) ([]byte, error) {
+   for _, key := range keys {
+      if bytes.Equal(key.Id, id) {
+         return key.Key, nil
+      }
+   }
+   return nil, errors.New("key not found")
+}
 
 const (
    kWrappingKeyLabel    = "ENCRYPTION"
@@ -94,13 +105,4 @@ func decodeLicenseFromMessage(message protobuf.Message, sessionKey []byte, reque
       keys = append(keys, kc)
    }
    return keys, nil
-}
-
-func GetKey(keys []*KeyContainer, id []byte) ([]byte, bool) {
-   for _, k := range keys {
-      if bytes.Equal(k.Id, id) {
-         return k.Key, true
-      }
-   }
-   return nil, false
 }

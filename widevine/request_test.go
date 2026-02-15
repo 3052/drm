@@ -18,51 +18,43 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   pemBytes, err := os.ReadFile(cache + "/L3/private_key.pem")
+   pem_bytes, err := os.ReadFile(cache + "/L3/private_key.pem")
    if err != nil {
       t.Fatal(err)
    }
-
    // 1. Create the PsshData struct
    pssh := &PsshData{
       ContentId: []byte(ctv.content_id),
    }
-
    // 2. Build the License Request directly from the pssh struct
-   reqBytes, err := pssh.BuildLicenseRequest(client_id)
+   req_bytes, err := pssh.BuildLicenseRequest(client_id)
    if err != nil {
       t.Fatal(err)
    }
-
-   privateKey, err := ParsePrivateKey(pemBytes)
+   private_key, err := ParsePrivateKey(pem_bytes)
    if err != nil {
       t.Fatal(err)
    }
-
    // 3. Sign the request
-   signedBytes, err := BuildSignedMessage(reqBytes, privateKey)
+   signed_bytes, err := BuildSignedMessage(req_bytes, private_key)
    if err != nil {
       t.Fatalf("Failed to create signed request: %v", err)
    }
-
    // 4. Send to License Server
-   resp, err := http.Post(ctv.url_license, "", bytes.NewReader(signedBytes))
+   resp, err := http.Post(ctv.url_license, "", bytes.NewReader(signed_bytes))
    if err != nil {
       t.Fatal(err)
    }
    defer resp.Body.Close()
-
-   signedBytes, err = io.ReadAll(resp.Body)
+   signed_bytes, err = io.ReadAll(resp.Body)
    if err != nil {
       t.Fatal(err)
    }
-
    // 5. Parse Response
-   keys, err := ParseLicenseResponse(signedBytes, reqBytes, privateKey)
+   keys, err := ParseLicenseResponse(signed_bytes, req_bytes, private_key)
    if err != nil {
       t.Fatal(err)
    }
-
    key_id, err := hex.DecodeString(ctv.key_id)
    if err != nil {
       t.Fatal(err)
@@ -71,14 +63,12 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-
    // 6. Verify Key
-   foundKey, ok := GetKey(keys, key_id)
-   if !ok {
-      t.Fatal("GetKey: key not found in response")
+   found_key, err := GetKey(keys, key_id)
+   if err != nil {
+      t.Fatal(err)
    }
-
-   if !bytes.Equal(foundKey, key) {
+   if !bytes.Equal(found_key, key) {
       t.Fatal("!bytes.Equal")
    }
 }
