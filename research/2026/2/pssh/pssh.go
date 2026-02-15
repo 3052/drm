@@ -1,83 +1,31 @@
-package pssh
+package main
 
-import "errors"
+import "fmt"
 
-var Methods = []struct {
-   one    string
-   two    string
-   three  string
-   four   string
-   result error
-}{
-   {
-      one:    "MPD content ID",
-      result: errors.New("need key ID"),
-   },
-   {
-      two:    "MPD key ID",
-      result: errors.New("https://ctv.ca need content ID"),
-   },
-   {
-      three:  "initialization content ID",
-      result: errors.New("need key ID"),
-   },
-   {
-      four:   "initialization key ID",
-      result: errors.New("https://ctv.ca need content ID"),
-   },
-   {
-      one: "MPD content ID",
-      two: "MPD key ID",
-      result: errors.New(`https://ctv.ca need content ID,
-      and its only in the initialization`),
-   },
-   {
-      one:    "MPD content ID",
-      // https://ctv.ca MPD is missing PSSH but has default_KID
-      two:    "MPD key ID",
-      three:  "initialization content ID",
-      result: nil,
-   },
-   {
-      one:    "MPD content ID",
-      three:  "initialization content ID",
-      result: errors.New("need key ID"),
-   },
-   {
-      two:    "MPD key ID",
-      four:   "initialization key ID",
-      result: errors.New("https://ctv.ca need content ID"),
-   },
-   {
-      two:   "MPD key ID",
-      three: "initialization content ID",
-      result: errors.New(`https://rakuten.tv need content ID,
-      and its only in the MPD`),
-   },
-   {
-      two:   "MPD key ID",
-      three: "initialization content ID",
-      four:  "initialization key ID",
-      result: errors.New(`https://rakuten.tv need content ID,
-      and its only in the MPD`),
-   },
-   {
-      one:  "MPD content ID",
-      four: "initialization key ID",
-      result: errors.New(`https://ctv.ca need content ID,
-      and its only in the initialization`),
-   },
-   {
-      one:  "MPD content ID",
-      two:  "MPD key ID",
-      four: "initialization key ID",
-      result: errors.New(`https://ctv.ca need content ID,
-      and its only in the initialization`),
-   },
-   {
-      three: "initialization content ID",
-      four:  "initialization key ID",
-      result: errors.New(`https://rakuten.tv need content ID,
-      and its only in the MPD`),
-   },
+func PowerSetRecursive(set []string) [][]string {
+   // Base case: the power set of an empty set is a set containing the empty set.
+   if len(set) == 0 {
+      return [][]string{{}}
+   }
+   first := set[0]
+   rest := set[1:]
+   // Recursively find the power set of the rest of the elements.
+   subPowerSet := PowerSetRecursive(rest)
+   // Create a new slice to hold the subsets that include 'first'.
+   // Pre-allocate with the same capacity as subPowerSet.
+   newSubsets := make([][]string, 0, len(subPowerSet))
+   for _, subset := range subPowerSet {
+      // Create a new subset by adding 'first' to the existing one.
+      newSubset := append([]string{first}, subset...)
+      newSubsets = append(newSubsets, newSubset)
+   }
+   // The final power set is the combination of the two.
+   return append(subPowerSet, newSubsets...)
+}
+
+func main() {
+   items := []string{"a", "b", "c"}
+   for _, subset := range PowerSetRecursive(items) {
+      fmt.Println(subset)
+   }
 }
