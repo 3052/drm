@@ -17,6 +17,23 @@ import (
    "slices"
 )
 
+func sign(hashVal []byte, privK *big.Int) ([]byte, error) {
+   rs, err := p256().dsa().Sign(
+      new(big.Int).SetBytes(hashVal), privK, big.NewInt(1),
+   )
+   if err != nil {
+      return nil, err
+   }
+   // Declare a fixed-size array. This guarantees 0-initialization.
+   var signature [64]byte
+   // FillBytes requires a slice, so we slice the array.
+   // This correctly handles the padding if r or s < 32 bytes.
+   rs[0].FillBytes(signature[:32])
+   rs[1].FillBytes(signature[32:])
+   // Return a slice referencing the array
+   return signature[:], nil
+}
+
 func (c *Chain) RequestBody(kid []byte, privK *big.Int) ([]byte, error) {
    cipherData, err := c.cipherData()
    if err != nil {
@@ -337,16 +354,6 @@ func (c *curve) eg() *elgamal.EG {
    return (*elgamal.EG)(c)
 }
 
-func sign(hashVal []byte, privK *big.Int) ([]byte, error) {
-   rs, err := p256().dsa().Sign(
-      new(big.Int).SetBytes(hashVal), privK, big.NewInt(1),
-   )
-   if err != nil {
-      return nil, err
-   }
-   return append(rs[0].Bytes(), rs[1].Bytes()...), nil
-}
-
 func elGamalDecrypt(data []byte, privK *big.Int) ([]byte, error) {
    // Unmarshal C1 component
    c1 := ecc.Point{
@@ -364,6 +371,7 @@ func elGamalDecrypt(data []byte, privK *big.Int) ([]byte, error) {
    }
    return append(point.X.Bytes(), point.Y.Bytes()...), nil
 }
+
 // Starting from (RMSDK 4.7+), the new playready root public key:
 // a32dff369e160df5b022106a63627412d6b174d501a3ccfa73bd441cc38ae94c
 // 0f7ada348d3eb3f5dd639aa46e29e2738bf88d18267c9c7bd3b96ae5faef780b

@@ -92,7 +92,7 @@ func (c *command) do_g1_z1() error {
 
 type command struct {
    // 1
-   g1               string
+   g1 string
    // 2
    z1               string
    set_encrypt_sign int64
