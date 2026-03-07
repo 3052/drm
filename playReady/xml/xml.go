@@ -6,6 +6,12 @@ import (
    "errors"
 )
 
+func (b *Bytes) UnmarshalText(data []byte) error {
+   var err error
+   *b, err = base64.StdEncoding.AppendDecode(nil, data)
+   return err
+}
+
 type WrmHeaderData struct {
    ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
    Kid         Bytes       `xml:"KID"` // FIXME this can be a slice
@@ -54,15 +60,6 @@ type La struct {
 
 func (b Bytes) MarshalText() ([]byte, error) {
    return base64.StdEncoding.AppendEncode(nil, b), nil
-}
-
-func (b *Bytes) UnmarshalText(data []byte) error {
-   var err error
-   *b, err = base64.StdEncoding.AppendDecode(nil, data)
-   if err != nil {
-      return err
-   }
-   return nil
 }
 
 type Bytes []byte
