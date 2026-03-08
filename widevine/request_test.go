@@ -87,8 +87,8 @@ func TestLicense(t *testing.T) {
    }
 }
 
-func post(link string, data []byte) ([]byte, error) {
-   resp, err := http.Post(link, "", bytes.NewReader(data))
+func post(url_data string, data []byte) ([]byte, error) {
+   resp, err := http.Post(url_data, "", bytes.NewReader(data))
    if err != nil {
       return nil, err
    }
