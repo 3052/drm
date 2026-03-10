@@ -9,7 +9,7 @@ import (
    "os"
 )
 
-func (c *command) do_g1() error {
+func (c *client) do_g1() error {
    data, err := os.ReadFile(c.g1)
    if err != nil {
       return err
@@ -19,8 +19,41 @@ func (c *command) do_g1() error {
    if err != nil {
       return err
    }
-   fmt.Printf("%q\n", chain.Certificates[0].Manufacturer.Value)
+   for _, certificate := range chain.Certificates {
+      if certificate.Manufacturer != nil {
+         fmt.Printf("%q\n", certificate.Manufacturer.Value)
+      }
+   }
    return nil
+}
+
+func (c *client) do_g1_z1() error {
+   // z1
+   data, err := os.ReadFile(c.z1)
+   if err != nil {
+      return err
+   }
+   z1 := new(big.Int).SetBytes(data)
+   encrypt_sign_key := big.NewInt(c.set_encrypt_sign)
+   err = write_file("zPrivEncrSig.dat", encrypt_sign_key.Bytes())
+   if err != nil {
+      return err
+   }
+   // g1
+   data, err = os.ReadFile(c.g1)
+   if err != nil {
+      return err
+   }
+   var chain playReady.Chain
+   err = chain.Decode(data)
+   if err != nil {
+      return err
+   }
+   err = chain.Leaf(z1, encrypt_sign_key)
+   if err != nil {
+      return err
+   }
+   return write_file("bDevCert.dat", chain.Encode())
 }
 
 func write_file(name string, data []byte) error {
@@ -30,13 +63,13 @@ func write_file(name string, data []byte) error {
 
 func main() {
    log.SetFlags(log.Ltime)
-   err := new(command).run()
+   err := new(client).do()
    if err != nil {
       log.Fatal(err)
    }
 }
 
-func (c *command) run() error {
+func (c *client) do() error {
    // 1
    flag.StringVar(&c.g1, "g", "", "g1")
    // 2
@@ -61,36 +94,7 @@ func (c *command) run() error {
    return nil
 }
 
-func (c *command) do_g1_z1() error {
-   // z1
-   data, err := os.ReadFile(c.z1)
-   if err != nil {
-      return err
-   }
-   z1 := new(big.Int).SetBytes(data)
-   encrypt_sign_key := big.NewInt(c.set_encrypt_sign)
-   err = write_file("EncryptSignKey", encrypt_sign_key.Bytes())
-   if err != nil {
-      return err
-   }
-   // g1
-   data, err = os.ReadFile(c.g1)
-   if err != nil {
-      return err
-   }
-   var chain playReady.Chain
-   err = chain.Decode(data)
-   if err != nil {
-      return err
-   }
-   err = chain.Leaf(z1, encrypt_sign_key)
-   if err != nil {
-      return err
-   }
-   return write_file("CertificateChain", chain.Encode())
-}
-
-type command struct {
+type client struct {
    // 1
    g1 string
    // 2
@@ -100,7 +104,7 @@ type command struct {
    get_encrypt_sign string
 }
 
-func (c *command) do_get_encrypt_sign() error {
+func (c *client) do_get_encrypt_sign() error {
    data, err := os.ReadFile(c.get_encrypt_sign)
    if err != nil {
       return err

@@ -17,3 +17,10 @@ bdevcert.dat
 zprivencr.dat
 zprivsig.dat
 ~~~
+
+## mine
+
+~~~
+bDevCert.dat
+zPrivEncrSig.dat
+~~~
