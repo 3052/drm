@@ -10,11 +10,26 @@ import (
    "testing"
 )
 
+var SL2000 = struct {
+   dir string
+   g1  string
+   z1  string
+}{
+   dir: "ignore/SL2000",
+   g1:  "/bgroupcert.dat",
+   z1:  "/zgpriv.dat",
+}
+
 var key_tests = []struct {
    key    string
    kid_wv string
    url    string
 }{
+   {
+      key:    "00000000000000000000000000000000",
+      kid_wv: "10000000000000000000000000000000",
+      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
+   },
    {
       key:    "ee0d569c019057569eaf28b988c206f6",
       kid_wv: "01038786b77fb6ca14eb864155de730e", // L1
@@ -25,15 +40,10 @@ var key_tests = []struct {
       kid_wv: "318f7ece69afcfe3e96de31be6b77272",
       url:    "https://prod-playready.rakuten.tv/v1/licensing/pr?uuid=bd497069-8a8f-40a8-b898-b5edf1327761",
    },
-   {
-      key:    "00000000000000000000000000000000",
-      kid_wv: "10000000000000000000000000000000",
-      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:aescbc",
-   },
-}
+}[:1]
 
 func TestKey(t *testing.T) {
-   data, err := os.ReadFile(SL2000.dir + "chain.txt")
+   data, err := os.ReadFile(SL2000.dir + "/chain.txt")
    if err != nil {
       t.Fatal(err)
    }
@@ -42,13 +52,13 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   data, err = os.ReadFile(SL2000.dir + "signing_key.txt")
+   data, err = os.ReadFile(SL2000.dir + "/signing_key.txt")
    if err != nil {
       t.Fatal(err)
    }
    var signingKey EcKey
    signingKey.decode(data)
-   data, err = os.ReadFile(SL2000.dir + "encrypt_key.txt")
+   data, err = os.ReadFile(SL2000.dir + "/encrypt_key.txt")
    if err != nil {
       t.Fatal(err)
    }
@@ -76,12 +86,12 @@ func TestKey(t *testing.T) {
             t.Fatal(err)
          }
       }()
-      var license1 license
-      err = license1.decrypt(encryptKey, data)
+      var license_data license
+      err = license_data.decrypt(encryptKey, data)
       if err != nil {
          t.Fatal(err)
       }
-      content := license1.contentKey
+      content := license_data.contentKey
       UuidOrGuid(content.KeyID[:])
       if hex.EncodeToString(content.KeyID[:]) != test.kid_wv {
          t.Fatal(".KeyID")
@@ -90,16 +100,6 @@ func TestKey(t *testing.T) {
          t.Fatal(".Key")
       }
    }
-}
-
-var SL2000 = struct {
-   dir string
-   g1  string
-   z1  string
-}{
-   dir: "ignore/",
-   g1:  "g1",
-   z1:  "z1",
 }
 
 func TestChain(t *testing.T) {
@@ -130,15 +130,15 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(SL2000.dir+"chain.txt", certificate.Encode())
+   err = write_file(SL2000.dir+"/chain.txt", certificate.Encode())
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(SL2000.dir+"signing_key.txt", signingKey.Private())
+   err = write_file(SL2000.dir+"/signing_key.txt", signingKey.Private())
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(SL2000.dir+"encrypt_key.txt", encryptKey.Private())
+   err = write_file(SL2000.dir+"/encrypt_key.txt", encryptKey.Private())
    if err != nil {
       t.Fatal(err)
    }
