@@ -29,6 +29,11 @@ var key_tests = []struct {
       key:    "00000000000000000000000000000000",
       kid_wv: "10000000000000000000000000000000",
       url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
+      
+      
+      "(kid:Ik3MZwSoSU6VmMielYwnUg==),(kid:SIpVQedab0qKACmFUZP4Og==,ckt:AES128BitCBC)"
+      
+      
    },
    {
       key:    "ee0d569c019057569eaf28b988c206f6",
