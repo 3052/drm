@@ -2,12 +2,37 @@ package playReady
 
 import (
    "bytes"
+   "crypto/aes"
+   "crypto/cipher"
    "crypto/ecdsa"
    "crypto/sha256"
    "encoding/binary"
    "errors"
+   "github.com/emmansun/gmsm/padding"
    "slices"
 )
+
+func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
+   value := Data{
+      CertificateChains: CertificateChains{
+         CertificateChain: c.Encode(),
+      },
+      Features: Features{
+         Feature: Feature{"AESCBC"}, // SCALABLE
+      },
+   }
+   data, err := value.Marshal()
+   if err != nil {
+      return nil, err
+   }
+   block, err := aes.NewCipher(key.aesKey())
+   if err != nil {
+      return nil, err
+   }
+   data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
+   cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
+   return append(key.aesIv(), data...), nil
+}
 
 // Chain represents a chain of certificates.
 type Chain struct {
@@ -75,26 +100,6 @@ func (c *Chain) verify() bool {
       modelBase = c.certs[i].keyInfo.keys[0].publicKey[:]
    }
    return true
-}
-
-func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
-   data := Data{
-      CertificateChains: CertificateChains{
-         CertificateChain: c.Encode(),
-      },
-      Features: Features{
-         Feature: Feature{"AESCBC"}, // SCALABLE
-      },
-   }
-   data1, err := data.Marshal()
-   if err != nil {
-      return nil, err
-   }
-   data1, err = aesCBCHandler(data1, key.aesKey(), key.aesIv(), true)
-   if err != nil {
-      return nil, err
-   }
-   return append(key.aesIv(), data1...), nil
 }
 
 // CreateLeaf creates a new leaf certificate and adds it to the chain.

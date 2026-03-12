@@ -2,11 +2,7 @@
 41.neocities.org/protobuf v1.6.0/go.mod h1:nhuoexeiRjXmAbWQN21+Ta6/wfKYeqLWA33H6jgLf0s=
 filippo.io/nistec v0.0.4 h1:F14ZHT5htWlMnQVPndX9ro9arf56cBhQxq4LnDI491s=
 filippo.io/nistec v0.0.4/go.mod h1:PK/lw8I1gQT4hUML4QGaqljwdDaFcMyFKSXN7kjrtKI=
-github.com/deatil/go-cryptobin v1.1.1013 h1:SF4uNijMfuW42Ir8q1YusgSONGbEqlCeXbSbBUkUImE=
-github.com/deatil/go-cryptobin v1.1.1013/go.mod h1:x+/+SzyfbxliY2y0Fwe+OoLU0DEt9kWs6OMiwghcfJ0=
 github.com/emmansun/gmsm v0.41.0 h1:F8F0HPhKAkiD3ZLcSNECVTIMLPcmVMCHJOr2F3NiEiU=
 github.com/emmansun/gmsm v0.41.0/go.mod h1:EpQkChC2hxFAutJRbVNDGybWOVA0YGnfldnAfFG7F2M=
-golang.org/x/crypto v0.47.0 h1:V6e3FRj+n4dbpw86FJ8Fv7XVOql7TEwpHapKoMJ/GO8=
-golang.org/x/crypto v0.47.0/go.mod h1:ff3Y9VzzKbwSSEzWqJsJVBnWmRwRSHt/6Op5n9bQc4A=
 golang.org/x/sys v0.40.0 h1:DBZZqJ2Rkml6QMQsZywtnjnnGvHza6BTfYFWY9kjEWQ=
 golang.org/x/sys v0.40.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=

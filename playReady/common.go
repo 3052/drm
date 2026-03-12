@@ -62,11 +62,6 @@ func UuidOrGuid(data []byte) {
    // Data4 (last 8 bytes) - no change needed, so no operation here
 }
 
-type auxKeys struct {
-   Count uint16
-   Keys  []auxKey
-}
-
 type auxKey struct {
    Location uint32
    Key      [16]byte
@@ -80,6 +75,11 @@ func (a *auxKey) decode(data []byte) int {
    return n
 }
 
+type auxKeys struct {
+   Count uint16
+   Keys  []auxKey
+}
+
 // Decode decodes a byte slice into an AuxKeys structure.
 func (a *auxKeys) decode(data []byte) {
    a.Count = binary.BigEndian.Uint16(data)
@@ -91,6 +91,55 @@ func (a *auxKeys) decode(data []byte) {
       a.Keys[i] = key
       data = data[n:]
    }
+}
+
+// device represents device capabilities.
+type device struct {
+   maxLicenseSize       uint32
+   maxHeaderSize        uint32
+   maxLicenseChainDepth uint32
+}
+
+// new initializes default device capabilities.
+func (d *device) New() {
+   d.maxLicenseSize = 10240
+   d.maxHeaderSize = 15360
+   d.maxLicenseChainDepth = 2
+}
+
+// encode encodes device capabilities into a byte slice.
+func (d *device) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, d.maxLicenseSize)
+   data = binary.BigEndian.AppendUint32(data, d.maxHeaderSize)
+   return binary.BigEndian.AppendUint32(data, d.maxLicenseChainDepth)
+}
+
+type features struct {
+   entries  uint32
+   features []uint32
+}
+
+func (f *features) New(Type int) {
+   f.entries = 1
+   f.features = []uint32{uint32(Type)}
+}
+
+func (f *features) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, f.entries)
+   for _, feature := range f.features {
+      data = binary.BigEndian.AppendUint32(data, feature)
+   }
+   return data
+}
+
+func (f *features) decode(data []byte) int {
+   f.entries = binary.BigEndian.Uint32(data)
+   n := 4
+   for range f.entries {
+      f.features = append(f.features, binary.BigEndian.Uint32(data[n:]))
+      n += 4
+   }
+   return n
 }
 
 type ftlv struct {
@@ -142,53 +191,4 @@ func (s *signature) decode(data []byte) {
    s.Length = binary.BigEndian.Uint16(data)
    data = data[2:]
    s.Data = data
-}
-
-type features struct {
-   entries  uint32
-   features []uint32
-}
-
-func (f *features) New(Type int) {
-   f.entries = 1
-   f.features = []uint32{uint32(Type)}
-}
-
-func (f *features) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, f.entries)
-   for _, feature := range f.features {
-      data = binary.BigEndian.AppendUint32(data, feature)
-   }
-   return data
-}
-
-func (f *features) decode(data []byte) int {
-   f.entries = binary.BigEndian.Uint32(data)
-   n := 4
-   for range f.entries {
-      f.features = append(f.features, binary.BigEndian.Uint32(data[n:]))
-      n += 4
-   }
-   return n
-}
-
-// device represents device capabilities.
-type device struct {
-   maxLicenseSize       uint32
-   maxHeaderSize        uint32
-   maxLicenseChainDepth uint32
-}
-
-// new initializes default device capabilities.
-func (d *device) New() {
-   d.maxLicenseSize = 10240
-   d.maxHeaderSize = 15360
-   d.maxLicenseChainDepth = 2
-}
-
-// encode encodes device capabilities into a byte slice.
-func (d *device) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, d.maxLicenseSize)
-   data = binary.BigEndian.AppendUint32(data, d.maxHeaderSize)
-   return binary.BigEndian.AppendUint32(data, d.maxLicenseChainDepth)
 }

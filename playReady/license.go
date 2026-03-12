@@ -5,8 +5,22 @@ import (
    "crypto/aes"
    "encoding/binary"
    "errors"
-   "github.com/deatil/go-cryptobin/mac"
+   "github.com/emmansun/gmsm/cbcmac"
 )
+
+func (l *license) verify(contentIntegrity []byte) error {
+   data := l.encode()
+   data = data[:len(data)-int(l.signature.Length)]
+   block, err := aes.NewCipher(contentIntegrity)
+   if err != nil {
+      return err
+   }
+   data = cbcmac.NewCMAC(block, aes.BlockSize).MAC(data)
+   if !bytes.Equal(data, l.signature.Data) {
+      return errors.New("failed to decrypt the keys")
+   }
+   return nil
+}
 
 type license struct {
    Magic          [4]byte
@@ -18,20 +32,6 @@ type license struct {
    eccKey         *eccKey
    signature      *signature
    auxKeyObject   *auxKeys
-}
-
-func (l *license) verify(contentIntegrity []byte) error {
-   data := l.encode()
-   data = data[:len(data)-int(l.signature.Length)]
-   block, err := aes.NewCipher(contentIntegrity)
-   if err != nil {
-      return err
-   }
-   data = mac.NewCMAC(block, aes.BlockSize).MAC(data)
-   if !bytes.Equal(data, l.signature.Data) {
-      return errors.New("failed to decrypt the keys")
-   }
-   return nil
 }
 
 func (l *license) encode() []byte {

@@ -7,7 +7,6 @@ import (
    "encoding/binary"
    "encoding/hex"
    "filippo.io/nistec"
-   "github.com/deatil/go-cryptobin/cryptobin/crypto"
    "github.com/emmansun/gmsm/cipher"
    "math/big"
    "slices"
@@ -21,19 +20,6 @@ func aesEcbEncrypt(data, key []byte) ([]byte, error) {
    data1 := make([]byte, len(data))
    cipher.NewECBEncrypter(block).CryptBlocks(data1, data)
    return data1, nil
-}
-
-// aesCBCHandler performs AES CBC encryption/decryption with PKCS7 padding.
-func aesCBCHandler(data, key, iv []byte, encrypt bool) ([]byte, error) {
-   if encrypt {
-      bin := crypto.FromBytes(data).WithKey(key).WithIv(iv).
-         Aes().CBC().PKCS7Padding().Encrypt()
-      return bin.ToBytes(), bin.Error()
-   } else {
-      bin := crypto.FromBytes(data).WithKey(key).WithIv(iv).
-         Aes().CBC().PKCS7Padding().Decrypt()
-      return bin.ToBytes(), bin.Error()
-   }
 }
 
 // xorKey performs XOR operation on two byte slices.
