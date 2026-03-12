@@ -1,26 +1,26 @@
 package playReady
 
 import (
+   "crypto/aes"
    "crypto/ecdsa"
    "crypto/elliptic"
    "encoding/binary"
    "encoding/hex"
+   "filippo.io/nistec"
    "github.com/deatil/go-cryptobin/cryptobin/crypto"
+   "github.com/emmansun/gmsm/cipher"
    "math/big"
    "slices"
 )
 
-// aesECBHandler performs AES ECB encryption/decryption.
-func aesECBHandler(data, key []byte, encrypt bool) ([]byte, error) {
-   if encrypt {
-      bin := crypto.FromBytes(data).WithKey(key).
-         Aes().ECB().NoPadding().Encrypt()
-      return bin.ToBytes(), bin.Error()
-   } else {
-      bin := crypto.FromBytes(data).WithKey(key).
-         Aes().ECB().NoPadding().Decrypt()
-      return bin.ToBytes(), bin.Error()
+func aesEcbEncrypt(data, key []byte) ([]byte, error) {
+   block, err := aes.NewCipher(key)
+   if err != nil {
+      return nil, err
    }
+   data1 := make([]byte, len(data))
+   cipher.NewECBEncrypter(block).CryptBlocks(data1, data)
+   return data1, nil
 }
 
 // aesCBCHandler performs AES CBC encryption/decryption with PKCS7 padding.
@@ -67,41 +67,67 @@ func (f Fill) key() (*EcKey, error) {
 }
 
 func elGamalEncrypt(data, key *ecdsa.PublicKey) []byte {
-   g := elliptic.P256()
-   y := big.NewInt(1) // In a real scenario, y should be truly random
-   c1x, c1y := g.ScalarBaseMult(y.Bytes())
-   sX, sY := g.ScalarMult(key.X, key.Y, y.Bytes())
-   c2X, c2Y := g.Add(data.X, data.Y, sX, sY)
-   return slices.Concat(c1x.Bytes(), c1y.Bytes(), c2X.Bytes(), c2Y.Bytes())
+   y := make([]byte, 32)
+   y[31] = 1 // In a real scenario, y should be truly random
+
+   c1, _ := nistec.NewP256Point().ScalarBaseMult(y)
+
+   keyECDH, _ := key.ECDH()
+   keyPoint, _ := nistec.NewP256Point().SetBytes(keyECDH.Bytes())
+
+   s, _ := nistec.NewP256Point().ScalarMult(keyPoint, y)
+
+   dataECDH, _ := data.ECDH()
+   dataPoint, _ := nistec.NewP256Point().SetBytes(dataECDH.Bytes())
+
+   c2 := nistec.NewP256Point().Add(dataPoint, s)
+
+   return slices.Concat(c1.Bytes()[1:], c2.Bytes()[1:])
 }
 
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
 
 func elGamalKeyGeneration() *ecdsa.PublicKey {
    data, _ := hex.DecodeString(wmrmPublicKey)
-   var key ecdsa.PublicKey
-   key.X = new(big.Int).SetBytes(data[:32])
-   key.Y = new(big.Int).SetBytes(data[32:])
-   return &key
+   uncompressed := make([]byte, 65)
+   uncompressed[0] = 4
+   copy(uncompressed[1:], data)
+   
+   pub, _ := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed)
+   return pub
 }
 
 func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) []byte {
-   // generator
-   g := elliptic.P256()
-   // Unmarshal C1 component
-   c1X := new(big.Int).SetBytes(ciphertext[:32])
-   c1Y := new(big.Int).SetBytes(ciphertext[32:64])
-   // Unmarshal C2 component
-   c2X := new(big.Int).SetBytes(ciphertext[64:96])
-   c2Y := new(big.Int).SetBytes(ciphertext[96:])
+   // C1 component
+   c1Bytes := make([]byte, 65)
+   c1Bytes[0] = 4
+   copy(c1Bytes[1:], ciphertext[:64])
+   c1, _ := nistec.NewP256Point().SetBytes(c1Bytes)
+
+   // C2 component
+   c2Bytes := make([]byte, 65)
+   c2Bytes[0] = 4
+   copy(c2Bytes[1:], ciphertext[64:128])
+   c2, _ := nistec.NewP256Point().SetBytes(c2Bytes)
+
    // Calculate shared secret s = C1^x
-   sX, sY := g.ScalarMult(c1X, c1Y, x.D.Bytes())
+   ecdhKey, _ := x.ECDH()
+   s, _ := nistec.NewP256Point().ScalarMult(c1, ecdhKey.Bytes())
+
    // Invert the point for subtraction
-   sY.Neg(sY)
-   sY.Mod(sY, g.Params().P)
+   sBytes := s.Bytes()
+   
+   // P-256 field prime: P = 2^256 - 2^224 + 2^192 + 2^96 - 1
+   P, _ := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+   Y := new(big.Int).SetBytes(sBytes[33:65])
+   Y.Sub(P, Y)
+   Y.FillBytes(sBytes[33:65])
+   
+   invS, _ := nistec.NewP256Point().SetBytes(sBytes)
+
    // Recover message point: M = C2 - s
-   mX, mY := g.Add(c2X, c2Y, sX, sY)
-   return append(mX.Bytes(), mY.Bytes()...)
+   m := nistec.NewP256Point().Add(c2, invS)
+   return m.Bytes()[1:]
 }
 
 type ecdsaSignature struct {
