@@ -143,15 +143,20 @@ func (e EcKey) Private() ([]byte, error) {
 }
 
 // Public returns the public key bytes.
-func (e *EcKey) Public() []byte {
-   if e[0] != nil {
-      b, err := e[0].PublicKey.Bytes()
-      if err == nil && len(b) > 0 {
-         // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
-         return b[1:]
-      }
+func (e *EcKey) Public() ([]byte, error) {
+   if e[0] == nil {
+      return nil, errors.New("private key is nil")
    }
-   return nil
+   ecdhKey, err := e[0].PublicKey.ECDH()
+   if err != nil {
+      return nil, err
+   }
+   b := ecdhKey.Bytes()
+   if len(b) > 0 {
+      // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
+      return b[1:], nil
+   }
+   return nil, errors.New("invalid public key length")
 }
 
 type eccKey struct {
@@ -249,8 +254,7 @@ type xmlKey struct {
    X         [32]byte
 }
 
-// Generate now returns an error to handle private key generation failures
-func (x *xmlKey) Generate() error {
+func (x *xmlKey) New() error {
    d := make([]byte, 32)
    d[31] = 1
 
@@ -263,10 +267,9 @@ func (x *xmlKey) Generate() error {
    if err != nil {
       return err
    }
-   if pub == nil {
-      return errors.New("public key parsed as nil")
+   if pub != nil {
+      x.PublicKey = *pub
    }
-   x.PublicKey = *pub
    copy(x.X[:], pubBytes[1:33])
    return nil
 }

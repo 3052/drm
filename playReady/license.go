@@ -113,7 +113,11 @@ func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
    if err != nil {
       return nil, err
    }
-   if !bytes.Equal(l.EccKey.Value, e.Public()) {
+   pubBytes, err := e.Public()
+   if err != nil {
+      return nil, err
+   }
+   if !bytes.Equal(l.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
    err = l.ContentKey.decrypt(e[0], l.AuxKeyObject)

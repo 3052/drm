@@ -47,7 +47,6 @@ func (s *SignedInfo) Marshal() ([]byte, error) {
    return xml.Marshal(s)
 }
 
-// newLa now returns (La, error) because key generation and encryption can fail.
 func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {

@@ -6,6 +6,7 @@ import (
    "crypto/elliptic"
    "encoding/binary"
    "encoding/hex"
+   "errors"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
    "math/big"
@@ -34,7 +35,8 @@ func xorKey(a, b []byte) []byte {
    return c
 }
 
-// elGamalEncrypt now returns an error instead of ignoring nistec/ECDH failures.
+// Fill type removed as requested.
+
 func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
    y := make([]byte, 32)
    y[31] = 1 // In a real scenario, y should be truly random
@@ -48,6 +50,7 @@ func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
    if err != nil {
       return nil, err
    }
+
    keyPoint, err := nistec.NewP256Point().SetBytes(keyECDH.Bytes())
    if err != nil {
       return nil, err
@@ -62,6 +65,7 @@ func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
    if err != nil {
       return nil, err
    }
+
    dataPoint, err := nistec.NewP256Point().SetBytes(dataECDH.Bytes())
    if err != nil {
       return nil, err
@@ -114,6 +118,7 @@ func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) ([]byte, error) {
    if err != nil {
       return nil, err
    }
+
    s, err := nistec.NewP256Point().ScalarMult(c1, ecdhKey.Bytes())
    if err != nil {
       return nil, err
@@ -123,7 +128,10 @@ func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) ([]byte, error) {
    sBytes := s.Bytes()
 
    // P-256 field prime: P = 2^256 - 2^224 + 2^192 + 2^96 - 1
-   P, _ := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+   P, ok := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+   if !ok {
+      return nil, errors.New("failed to parse P-256 prime")
+   }
    Y := new(big.Int).SetBytes(sBytes[33:65])
    Y.Sub(P, Y)
    Y.FillBytes(sBytes[33:65])

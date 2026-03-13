@@ -105,20 +105,34 @@ func (c *Chain) verify() bool {
 
 // CreateLeaf creates a new leaf certificate and adds it to the chain.
 func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
+   modelPub, err := modelKey.Public()
+   if err != nil {
+      return err
+   }
    // Verify that the provided modelKey matches the public key in the chain's
    // first certificate.
-   if !bytes.Equal(c.certs[0].keyInfo.keys[0].publicKey[:], modelKey.Public()) {
+   if !bytes.Equal(c.certs[0].keyInfo.keys[0].publicKey[:], modelPub) {
       return errors.New("zgpriv not for cert")
    }
    // Verify the existing chain's validity.
    if !c.verify() {
       return errors.New("cert is not valid")
    }
+
+   signPub, err := signingKey.Public()
+   if err != nil {
+      return err
+   }
+   encPub, err := encryptKey.Public()
+   if err != nil {
+      return err
+   }
+
    // Assemble raw data for the unsigned certificate.
    var leafData bytes.Buffer
    {
       // Calculate digest for the signing key.
-      digest := sha256.Sum256(signingKey.Public())
+      digest := sha256.Sum256(signPub)
       // Initialize certificate information.
       var info certificateInfo
       info.New(c.certs[0].certificateInfo.securityLevel, digest[:])
@@ -149,7 +163,7 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
    {
       // Initialize key information for signing and encryption keys.
       var key keyInfo
-      key.New(signingKey.Public(), encryptKey.Public())
+      key.New(signPub, encPub)
       // Create FTLV for key information.
       var value ftlv
       value.New(1, 6, key.encode())
@@ -175,7 +189,7 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
       sign := append(r.Bytes(), s.Bytes()...)
       // Initialize the signature data for the new certificate.
       var signatureData ecdsaSignature
-      signatureData.New(sign, modelKey.Public())
+      signatureData.New(sign, modelPub)
       // Create FTLV for the signature.
       var value ftlv
       value.New(1, 8, signatureData.encode())
@@ -196,22 +210,18 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
 // GenerateLicenseRequest creates the XML body for a license acquisition request.
 func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, error) {
    var key xmlKey
-   // Renamed from New() to Generate() to reflect that it returns an error
-   if err := key.Generate(); err != nil {
+   err := key.New()
+   if err != nil {
       return nil, err
    }
-
    cipherData, err := c.cipherData(&key)
    if err != nil {
       return nil, err
    }
-
-   // newLa now returns an error because encryption can fail
    la, err := newLa(&key.PublicKey, cipherData, kid)
    if err != nil {
       return nil, err
    }
-
    laData, err := la.Marshal()
    if err != nil {
       return nil, err
