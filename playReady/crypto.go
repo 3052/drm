@@ -8,7 +8,6 @@ import (
    "encoding/hex"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
-   "math/big"
    "slices"
 )
 
@@ -119,22 +118,10 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
       return nil, err
    }
 
-   // Invert the point for subtraction
-   secBytes := sharedSec.Bytes()
+   // Invert the point for subtraction: invSec = -sharedSec
+   invSec := nistec.NewP256Point().Negate(sharedSec)
 
-   // Retrieve the P-256 field prime directly from the standard library
-   primeP := elliptic.P256().Params().P
-
-   yCoord := new(big.Int).SetBytes(secBytes[33:65])
-   yCoord.Sub(primeP, yCoord)
-   yCoord.FillBytes(secBytes[33:65])
-
-   invSec, err := nistec.NewP256Point().SetBytes(secBytes)
-   if err != nil {
-      return nil, err
-   }
-
-   // Recover message point: mPoint = C2 - sharedSec
+   // Recover message point: mPoint = C2 + (-sharedSec)
    mPoint := nistec.NewP256Point().Add(c2, invSec)
    return mPoint.Bytes()[1:], nil
 }

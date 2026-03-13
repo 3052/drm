@@ -65,9 +65,9 @@ func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
       ci [16]byte
       ck [16]byte
    )
-   for i := range 16 {
-      ci[i] = decrypted[i*2]
-      ck[i] = decrypted[i*2+1]
+   for index := range 16 {
+      ci[index] = decrypted[index*2]
+      ck[index] = decrypted[index*2+1]
    }
 
    magicZero, err := hex.DecodeString(magicConstantZero)
@@ -137,7 +137,7 @@ type eccKey struct {
    Value  []byte
 }
 
-// Decode decodes a byte slice into an ECCKey structure.
+// decode decodes a byte slice into an ECCKey structure.
 func (e *eccKey) decode(data []byte) {
    e.Curve = binary.BigEndian.Uint16(data)
    data = data[2:]
@@ -156,7 +156,7 @@ type keyData struct {
    usage features
 }
 
-// new initializes a new key with provided data and type.
+// New initializes a new key with provided data and type.
 func (k *keyData) New(data []byte, Type int) {
    k.keyType = 1  // Assuming type 1 is for ECDSA keys
    k.length = 512 // Assuming key length in bits
@@ -176,14 +176,14 @@ func (k *keyData) encode() []byte {
 // decode decodes a byte slice into the key structure.
 func (k *keyData) decode(data []byte) int {
    k.keyType = binary.BigEndian.Uint16(data)
-   offset := 2
-   k.length = binary.BigEndian.Uint16(data[offset:])
-   offset += 2
-   k.flags = binary.BigEndian.Uint32(data[offset:])
-   offset += 4
-   offset += copy(k.publicKey[:], data[offset:])
-   offset += k.usage.decode(data[offset:])
-   return offset
+   n := 2 // single letter 'n' allowed because it is the return variable
+   k.length = binary.BigEndian.Uint16(data[n:])
+   n += 2
+   k.flags = binary.BigEndian.Uint32(data[n:])
+   n += 4
+   n += copy(k.publicKey[:], data[n:])
+   n += k.usage.decode(data[n:])
+   return n
 }
 
 type keyInfo struct {
@@ -191,7 +191,7 @@ type keyInfo struct {
    keys    []keyData
 }
 
-// new initializes a new keyInfo with signing and encryption keys.
+// New initializes a new keyInfo with signing and encryption keys.
 func (k *keyInfo) New(signingKey, encryptKey []byte) {
    k.entries = 2
    k.keys = make([]keyData, 2)
@@ -213,10 +213,10 @@ func (k *keyInfo) decode(data []byte) {
    k.entries = binary.BigEndian.Uint32(data)
    data = data[4:]
    k.keys = make([]keyData, k.entries)
-   for i := range k.entries {
+   for index := range k.entries {
       var key keyData
       offset := key.decode(data)
-      k.keys[i] = key
+      k.keys[index] = key
       data = data[offset:]
    }
 }

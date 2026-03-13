@@ -55,38 +55,38 @@ func (l *License) decode(data []byte) error {
    copied = copy(l.RightsID[:], data)
    data = data[copied:]
    l.OuterContainer.decode(data)
-   var n1 int
-   for n1 < int(l.OuterContainer.Length)-16 {
-      var value ftlv
-      n1 += value.decode(l.OuterContainer.Value[n1:])
-      switch xmrType(value.Type) {
+   var outerOffset int
+   for outerOffset < int(l.OuterContainer.Length)-16 {
+      var outerValue ftlv
+      outerOffset += outerValue.decode(l.OuterContainer.Value[outerOffset:])
+      switch xmrType(outerValue.Type) {
       case globalPolicyContainerEntryType: // 2
          // Rakuten
       case playbackPolicyContainerEntryType: // 4
          // Rakuten
       case keyMaterialContainerEntryType: // 9
-         var n2 int
-         for n2 < int(value.Length)-16 {
-            var value1 ftlv
-            n2 += value1.decode(value.Value[n2:])
-            switch xmrType(value1.Type) {
+         var innerOffset int
+         for innerOffset < int(outerValue.Length)-16 {
+            var innerValue ftlv
+            innerOffset += innerValue.decode(outerValue.Value[innerOffset:])
+            switch xmrType(innerValue.Type) {
             case contentKeyEntryType: // 10
                l.ContentKey = &ContentKey{}
-               l.ContentKey.decode(value1.Value)
+               l.ContentKey.decode(innerValue.Value)
             case deviceKeyEntryType: // 42
                l.EccKey = &eccKey{}
-               l.EccKey.decode(value1.Value)
+               l.EccKey.decode(innerValue.Value)
             case auxKeyEntryType: // 81
                l.AuxKeyObject = &auxKeys{}
-               l.AuxKeyObject.decode(value1.Value)
+               l.AuxKeyObject.decode(innerValue.Value)
             default:
                return errors.New("FTLV.type")
             }
          }
       case signatureEntryType: // 11
          l.Signature = &signature{}
-         l.Signature.decode(value.Value)
-         l.Signature.Length = uint16(value.Length)
+         l.Signature.decode(outerValue.Value)
+         l.Signature.Length = uint16(outerValue.Length)
       default:
          return errors.New("FTLV.type")
       }
@@ -96,13 +96,13 @@ func (l *License) decode(data []byte) error {
 
 // DecryptLicense processes license data using the provided ECDSA private key and returns the parsed License.
 func DecryptLicense(privKey *ecdsa.PrivateKey, data []byte) (*License, error) {
-   licenseObj := &License{}
+   l := &License{} // single letter 'l' allowed because it is the return variable
    var envelope EnvelopeResponse
    err := envelope.Unmarshal(data)
    if err != nil {
       return nil, err
    }
-   err = licenseObj.decode(envelope.
+   err = l.decode(envelope.
       Body.
       AcquireLicenseResponse.
       AcquireLicenseResult.
@@ -118,16 +118,16 @@ func DecryptLicense(privKey *ecdsa.PrivateKey, data []byte) (*License, error) {
    if err != nil {
       return nil, err
    }
-   if !bytes.Equal(licenseObj.EccKey.Value, pubBytes) {
+   if !bytes.Equal(l.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
-   err = licenseObj.ContentKey.decrypt(privKey, licenseObj.AuxKeyObject)
+   err = l.ContentKey.decrypt(privKey, l.AuxKeyObject)
    if err != nil {
       return nil, err
    }
-   err = licenseObj.Verify(licenseObj.ContentKey.Integrity[:])
+   err = l.Verify(l.ContentKey.Integrity[:])
    if err != nil {
       return nil, err
    }
-   return licenseObj, nil
+   return l, nil
 }
