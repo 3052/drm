@@ -78,7 +78,7 @@ func elGamalKeyGeneration() *ecdsa.PublicKey {
    uncompressed := make([]byte, 65)
    uncompressed[0] = 4
    copy(uncompressed[1:], data)
-   
+
    pub, _ := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed)
    return pub
 }
@@ -102,13 +102,13 @@ func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) []byte {
 
    // Invert the point for subtraction
    sBytes := s.Bytes()
-   
+
    // P-256 field prime: P = 2^256 - 2^224 + 2^192 + 2^96 - 1
    P, _ := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
    Y := new(big.Int).SetBytes(sBytes[33:65])
    Y.Sub(P, Y)
    Y.FillBytes(sBytes[33:65])
-   
+
    invS, _ := nistec.NewP256Point().SetBytes(sBytes)
 
    // Recover message point: M = C2 - s

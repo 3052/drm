@@ -90,11 +90,16 @@ func (c *certificate) verify(pubKey []byte) bool {
       return false
    }
    // Reconstruct the ECDSA public key from the byte slice.
-   publicKey := ecdsa.PublicKey{
-      Curve: elliptic.P256(), // Assuming P256 curve
-      X:     new(big.Int).SetBytes(pubKey[:32]),
-      Y:     new(big.Int).SetBytes(pubKey[32:]),
+   // We need to prepend 0x04 to indicate uncompressed coordinates for ParseUncompressedPublicKey
+   encodedKey := make([]byte, 65)
+   encodedKey[0] = 4
+   copy(encodedKey[1:], pubKey)
+
+   publicKey, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), encodedKey)
+   if err != nil {
+      return false
    }
+
    // Get the data that was signed (up to lengthToSignature).
    data := c.encode()
    data = data[:c.lengthToSignature]
@@ -104,7 +109,7 @@ func (c *certificate) verify(pubKey []byte) bool {
    r := new(big.Int).SetBytes(sign[:32])
    s := new(big.Int).SetBytes(sign[32:])
    // Verify the signature.
-   return ecdsa.Verify(&publicKey, signatureDigest[:], r, s)
+   return ecdsa.Verify(publicKey, signatureDigest[:], r, s)
 }
 
 // newNoSig initializes a new Cert without signature data.
