@@ -18,35 +18,35 @@ func aesEcbEncrypt(data, key []byte) ([]byte, error) {
    if err != nil {
       return nil, err
    }
-   data1 := make([]byte, len(data))
-   cipher.NewECBEncrypter(block).CryptBlocks(data1, data)
-   return data1, nil
+   encData := make([]byte, len(data))
+   cipher.NewECBEncrypter(block).CryptBlocks(encData, data)
+   return encData, nil
 }
 
 // xorKey performs XOR operation on two byte slices.
-func xorKey(a, b []byte) []byte {
-   if len(a) != len(b) {
+func xorKey(left, right []byte) []byte {
+   if len(left) != len(right) {
       panic("slices have different lengths")
    }
-   c := make([]byte, len(a))
-   for i := 0; i < len(a); i++ {
-      c[i] = a[i] ^ b[i]
+   result := make([]byte, len(left))
+   for i := 0; i < len(left); i++ {
+      result[i] = left[i] ^ right[i]
    }
-   return c
+   return result
 }
 
-// Fill type removed as requested.
+// elGamalEncrypt encrypts data using the provided public key.
+// Note: Go syntax implicitly makes both `data` and `pubKey` *ecdsa.PublicKey.
+func elGamalEncrypt(data, pubKey *ecdsa.PublicKey) ([]byte, error) {
+   randY := make([]byte, 32)
+   randY[31] = 1 // In a real scenario, this should be truly random
 
-func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
-   y := make([]byte, 32)
-   y[31] = 1 // In a real scenario, y should be truly random
-
-   c1, err := nistec.NewP256Point().ScalarBaseMult(y)
+   c1, err := nistec.NewP256Point().ScalarBaseMult(randY)
    if err != nil {
       return nil, err
    }
 
-   keyECDH, err := key.ECDH()
+   keyECDH, err := pubKey.ECDH()
    if err != nil {
       return nil, err
    }
@@ -56,7 +56,7 @@ func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
       return nil, err
    }
 
-   s, err := nistec.NewP256Point().ScalarMult(keyPoint, y)
+   sharedSec, err := nistec.NewP256Point().ScalarMult(keyPoint, randY)
    if err != nil {
       return nil, err
    }
@@ -71,7 +71,7 @@ func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
       return nil, err
    }
 
-   c2 := nistec.NewP256Point().Add(dataPoint, s)
+   c2 := nistec.NewP256Point().Add(dataPoint, sharedSec)
 
    return slices.Concat(c1.Bytes()[1:], c2.Bytes()[1:]), nil
 }
@@ -79,13 +79,13 @@ func elGamalEncrypt(data, key *ecdsa.PublicKey) ([]byte, error) {
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
 
 func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
-   data, err := hex.DecodeString(wmrmPublicKey)
+   pubData, err := hex.DecodeString(wmrmPublicKey)
    if err != nil {
       return nil, err
    }
    uncompressed := make([]byte, 65)
    uncompressed[0] = 4
-   copy(uncompressed[1:], data)
+   copy(uncompressed[1:], pubData)
 
    pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed)
    if err != nil {
@@ -94,7 +94,7 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
    return pub, nil
 }
 
-func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) ([]byte, error) {
+func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error) {
    // C1 component
    c1Bytes := make([]byte, 65)
    c1Bytes[0] = 4
@@ -113,37 +113,37 @@ func elGamalDecrypt(ciphertext []byte, x *ecdsa.PrivateKey) ([]byte, error) {
       return nil, err
    }
 
-   // Calculate shared secret s = C1^x
-   ecdhKey, err := x.ECDH()
+   // Calculate shared secret = C1^privKey
+   ecdhKey, err := privKey.ECDH()
    if err != nil {
       return nil, err
    }
 
-   s, err := nistec.NewP256Point().ScalarMult(c1, ecdhKey.Bytes())
+   sharedSec, err := nistec.NewP256Point().ScalarMult(c1, ecdhKey.Bytes())
    if err != nil {
       return nil, err
    }
 
    // Invert the point for subtraction
-   sBytes := s.Bytes()
+   secBytes := sharedSec.Bytes()
 
-   // P-256 field prime: P = 2^256 - 2^224 + 2^192 + 2^96 - 1
-   P, ok := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+   // P-256 field prime = 2^256 - 2^224 + 2^192 + 2^96 - 1
+   primeP, ok := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
    if !ok {
       return nil, errors.New("failed to parse P-256 prime")
    }
-   Y := new(big.Int).SetBytes(sBytes[33:65])
-   Y.Sub(P, Y)
-   Y.FillBytes(sBytes[33:65])
+   yCoord := new(big.Int).SetBytes(secBytes[33:65])
+   yCoord.Sub(primeP, yCoord)
+   yCoord.FillBytes(secBytes[33:65])
 
-   invS, err := nistec.NewP256Point().SetBytes(sBytes)
+   invSec, err := nistec.NewP256Point().SetBytes(secBytes)
    if err != nil {
       return nil, err
    }
 
-   // Recover message point: M = C2 - s
-   m := nistec.NewP256Point().Add(c2, invS)
-   return m.Bytes()[1:], nil
+   // Recover message point: mPoint = C2 - sharedSec
+   mPoint := nistec.NewP256Point().Add(c2, invSec)
+   return mPoint.Bytes()[1:], nil
 }
 
 type ecdsaSignature struct {
@@ -163,11 +163,11 @@ func (s *ecdsaSignature) New(signatureData, signingKey []byte) {
 }
 
 func (s *ecdsaSignature) encode() []byte {
-   data := binary.BigEndian.AppendUint16(nil, s.signatureType)
-   data = binary.BigEndian.AppendUint16(data, s.signatureLength)
-   data = append(data, s.SignatureData...)
-   data = binary.BigEndian.AppendUint32(data, s.issuerLength*8)
-   return append(data, s.IssuerKey...)
+   encBuf := binary.BigEndian.AppendUint16(nil, s.signatureType)
+   encBuf = binary.BigEndian.AppendUint16(encBuf, s.signatureLength)
+   encBuf = append(encBuf, s.SignatureData...)
+   encBuf = binary.BigEndian.AppendUint32(encBuf, s.issuerLength*8)
+   return append(encBuf, s.IssuerKey...)
 }
 
 func (s *ecdsaSignature) decode(data []byte) {

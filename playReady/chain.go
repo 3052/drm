@@ -46,31 +46,31 @@ type Chain struct {
 
 // DecodeChain decodes a byte slice into a new Chain structure.
 func DecodeChain(data []byte) (*Chain, error) {
-   c := &Chain{}
-   n := copy(c.magic[:], data)
-   if string(c.magic[:]) != "CHAI" {
+   chain := &Chain{}
+   copied := copy(chain.magic[:], data)
+   if string(chain.magic[:]) != "CHAI" {
       return nil, errors.New("failed to find chain magic")
    }
-   data = data[n:]
-   c.version = binary.BigEndian.Uint32(data)
+   data = data[copied:]
+   chain.version = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.length = binary.BigEndian.Uint32(data)
+   chain.length = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.flags = binary.BigEndian.Uint32(data)
+   chain.flags = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.certCount = binary.BigEndian.Uint32(data)
+   chain.certCount = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.certs = make([]certificate, c.certCount)
-   for i := range c.certCount {
+   chain.certs = make([]certificate, chain.certCount)
+   for i := range chain.certCount {
       var cert certificate
-      n, err := cert.decode(data)
+      bytesRead, err := cert.decode(data)
       if err != nil {
          return nil, err
       }
-      c.certs[i] = cert
-      data = data[n:]
+      chain.certs[i] = cert
+      data = data[bytesRead:]
    }
-   return c, nil
+   return chain, nil
 }
 
 // Encode encodes the Chain into a byte slice.
@@ -182,11 +182,19 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
    {
       // Sign the unsigned certificate's data.
       digest := sha256.Sum256(unsignedCert.encode())
-      r, s, err := ecdsa.Sign(nil, modelKey[0], digest[:])
+      sigR, sigS, err := ecdsa.Sign(nil, modelKey[0], digest[:])
       if err != nil {
          return err
       }
-      sign := append(r.Bytes(), s.Bytes()...)
+
+      // Safely pad signatures to EXACTLY 32 bytes each to prevent out-of-bounds byte shifting
+      rBytes := make([]byte, 32)
+      sBytes := make([]byte, 32)
+      sigR.FillBytes(rBytes)
+      sigS.FillBytes(sBytes)
+
+      sign := append(rBytes, sBytes...)
+
       // Initialize the signature data for the new certificate.
       var signatureData ecdsaSignature
       signatureData.New(sign, modelPub)
@@ -218,7 +226,7 @@ func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, erro
    if err != nil {
       return nil, err
    }
-   la, err := newLa(&key.PublicKey, cipherData, kid)
+   la, err := newLa(key.PublicKey, cipherData, kid)
    if err != nil {
       return nil, err
    }
@@ -239,10 +247,17 @@ func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, erro
       return nil, err
    }
    signedDigest := sha256.Sum256(signedData)
-   r, s, err := ecdsa.Sign(nil, signing[0], signedDigest[:])
+   sigR, sigS, err := ecdsa.Sign(nil, signing[0], signedDigest[:])
    if err != nil {
       return nil, err
    }
+
+   // Safely pad signatures to prevent shifted indexing
+   rBytes := make([]byte, 32)
+   sBytes := make([]byte, 32)
+   sigR.FillBytes(rBytes)
+   sigS.FillBytes(sBytes)
+
    envelope := Envelope{
       Soap: "http://schemas.xmlsoap.org/soap/envelope/",
       Body: Body{
@@ -254,7 +269,7 @@ func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, erro
                   La:    la,
                   Signature: Signature{
                      SignedInfo:     signedInfo,
-                     SignatureValue: append(r.Bytes(), s.Bytes()...),
+                     SignatureValue: append(rBytes, sBytes...),
                   },
                },
             },

@@ -45,14 +45,14 @@ func (l *License) encode() []byte {
 }
 
 func (l *License) decode(data []byte) error {
-   n := copy(l.Magic[:], data)
-   data = data[n:]
+   copied := copy(l.Magic[:], data)
+   data = data[copied:]
    l.Offset = binary.BigEndian.Uint16(data)
    data = data[2:]
    l.Version = binary.BigEndian.Uint16(data)
    data = data[2:]
-   n = copy(l.RightsID[:], data)
-   data = data[n:]
+   copied = copy(l.RightsID[:], data)
+   data = data[copied:]
    l.OuterContainer.decode(data)
    var n1 int
    for n1 < int(l.OuterContainer.Length)-16 {
@@ -95,13 +95,13 @@ func (l *License) decode(data []byte) error {
 
 // DecryptLicense processes license data using the provided EcKey and returns the parsed License.
 func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
-   l := &License{}
+   licenseObj := &License{}
    var envelope EnvelopeResponse
    err := envelope.Unmarshal(data)
    if err != nil {
       return nil, err
    }
-   err = l.decode(envelope.
+   err = licenseObj.decode(envelope.
       Body.
       AcquireLicenseResponse.
       AcquireLicenseResult.
@@ -117,16 +117,16 @@ func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
    if err != nil {
       return nil, err
    }
-   if !bytes.Equal(l.EccKey.Value, pubBytes) {
+   if !bytes.Equal(licenseObj.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
-   err = l.ContentKey.decrypt(e[0], l.AuxKeyObject)
+   err = licenseObj.ContentKey.decrypt(e[0], licenseObj.AuxKeyObject)
    if err != nil {
       return nil, err
    }
-   err = l.Verify(l.ContentKey.Integrity[:])
+   err = licenseObj.Verify(licenseObj.ContentKey.Integrity[:])
    if err != nil {
       return nil, err
    }
-   return l, nil
+   return licenseObj, nil
 }

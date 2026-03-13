@@ -22,8 +22,8 @@ type ContentKey struct {
 
 // decode decodes a byte slice into a ContentKey structure.
 func (c *ContentKey) decode(data []byte) {
-   n := copy(c.KeyID[:], data)
-   data = data[n:]
+   copied := copy(c.KeyID[:], data)
+   data = data[copied:]
    c.KeyType = binary.BigEndian.Uint16(data)
    data = data[2:]
    c.CipherType = binary.BigEndian.Uint16(data)
@@ -33,29 +33,29 @@ func (c *ContentKey) decode(data []byte) {
    c.Value = data
 }
 
-func (c *ContentKey) decrypt(key *ecdsa.PrivateKey, auxKeys *auxKeys) error {
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) error {
    log.Println("PlayReady cipher type", c.CipherType)
    switch c.CipherType {
    case 3:
-      decrypted, err := elGamalDecrypt(c.Value, key)
+      decrypted, err := elGamalDecrypt(c.Value, privKey)
       if err != nil {
          return err
       }
-      n := copy(c.Integrity[:], decrypted)
-      decrypted = decrypted[n:]
+      copied := copy(c.Integrity[:], decrypted)
+      decrypted = decrypted[copied:]
       copy(c.Key[:], decrypted)
       return nil
    case 6:
-      return c.scalable(key, auxKeys)
+      return c.scalable(privKey, auxKeys)
    }
    return errors.New("cannot decrypt key")
 }
 
-func (c *ContentKey) scalable(key *ecdsa.PrivateKey, aux *auxKeys) error {
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
    rootKeyInfo := c.Value[:144]
    rootKey := rootKeyInfo[128:]
    leafKeys := c.Value[144:]
-   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], key)
+   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
    if err != nil {
       return err
    }
@@ -92,14 +92,14 @@ func (c *ContentKey) scalable(key *ecdsa.PrivateKey, aux *auxKeys) error {
    if err != nil {
       return err
    }
-   n := copy(c.Integrity[:], rgbKey)
-   rgbKey = rgbKey[n:]
+   copied := copy(c.Integrity[:], rgbKey)
+   rgbKey = rgbKey[copied:]
    copy(c.Key[:], rgbKey)
    return nil
 }
 
 // magicConstantZero returns a specific hex-decoded byte slice.
-func (*ContentKey) magicConstantZero() ([]byte, error) {
+func (c *ContentKey) magicConstantZero() ([]byte, error) {
    return hex.DecodeString("7ee9ed4af773224f00b8ea7efb027cbb")
 }
 
@@ -107,23 +107,20 @@ type EcKey [1]*ecdsa.PrivateKey
 
 // GenerateEcKey creates a new P-256 private key and returns it.
 func GenerateEcKey() (*EcKey, error) {
-   k, err := ecdsa.GenerateKey(elliptic.P256(), nil)
+   priv, err := ecdsa.GenerateKey(elliptic.P256(), nil)
    if err != nil {
       return nil, err
    }
-   return &EcKey{k}, nil
+   return &EcKey{priv}, nil
 }
 
 // DecodeEcKey decodes a raw private key byte slice into a new EcKey.
 func DecodeEcKey(data []byte) (*EcKey, error) {
-   d := make([]byte, 32)
-   if len(data) > 32 {
-      copy(d, data[len(data)-32:])
-   } else {
-      copy(d[32-len(data):], data)
+   if len(data) != 32 {
+      return nil, errors.New("invalid private key length, expected 32 bytes")
    }
 
-   priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), d)
+   priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
    if err != nil {
       return nil, err
    }
@@ -151,10 +148,10 @@ func (e *EcKey) Public() ([]byte, error) {
    if err != nil {
       return nil, err
    }
-   b := ecdhKey.Bytes()
-   if len(b) > 0 {
+   pubBytes := ecdhKey.Bytes()
+   if len(pubBytes) > 0 {
       // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
-      return b[1:], nil
+      return pubBytes[1:], nil
    }
    return nil, errors.New("invalid public key length")
 }
@@ -204,14 +201,14 @@ func (k *keyData) encode() []byte {
 // decode decodes a byte slice into the key structure.
 func (k *keyData) decode(data []byte) int {
    k.keyType = binary.BigEndian.Uint16(data)
-   n := 2
-   k.length = binary.BigEndian.Uint16(data[n:])
-   n += 2
-   k.flags = binary.BigEndian.Uint32(data[n:])
-   n += 4
-   n += copy(k.publicKey[:], data[n:])
-   n += k.usage.decode(data[n:])
-   return n
+   offset := 2
+   k.length = binary.BigEndian.Uint16(data[offset:])
+   offset += 2
+   k.flags = binary.BigEndian.Uint32(data[offset:])
+   offset += 4
+   offset += copy(k.publicKey[:], data[offset:])
+   offset += k.usage.decode(data[offset:])
+   return offset
 }
 
 type keyInfo struct {
@@ -243,33 +240,31 @@ func (k *keyInfo) decode(data []byte) {
    k.keys = make([]keyData, k.entries)
    for i := range k.entries {
       var key keyData
-      n := key.decode(data)
+      offset := key.decode(data)
       k.keys[i] = key
-      data = data[n:]
+      data = data[offset:]
    }
 }
 
 type xmlKey struct {
-   PublicKey ecdsa.PublicKey
+   PublicKey *ecdsa.PublicKey
    X         [32]byte
 }
 
 func (x *xmlKey) New() error {
-   d := make([]byte, 32)
-   d[31] = 1
+   privBytes := make([]byte, 32)
+   privBytes[31] = 1
 
-   privECDH, err := ecdh.P256().NewPrivateKey(d)
+   privECDH, err := ecdh.P256().NewPrivateKey(privBytes)
    if err != nil {
       return err
    }
    pubBytes := privECDH.PublicKey().Bytes()
-   pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes)
+   x.PublicKey, err = ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes)
    if err != nil {
       return err
    }
-   if pub != nil {
-      x.PublicKey = *pub
-   }
+
    copy(x.X[:], pubBytes[1:33])
    return nil
 }

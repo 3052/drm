@@ -47,12 +47,12 @@ func (s *SignedInfo) Marshal() ([]byte, error) {
    return xml.Marshal(s)
 }
 
-func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
       return La{}, err
    }
-   cipherValue, err := elGamalEncrypt(m, genKey)
+   cipherValue, err := elGamalEncrypt(pubKey, genKey)
    if err != nil {
       return La{}, err
    }
