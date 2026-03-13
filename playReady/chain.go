@@ -167,7 +167,7 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
    {
       // Sign the unsigned certificate's data.
       digest := sha256.Sum256(unsignedCert.encode())
-      r, s, err := ecdsa.Sign(Fill('A'), modelKey[0], digest[:])
+      r, s, err := ecdsa.Sign(nil, modelKey[0], digest[:])
       if err != nil {
          return err
       }
@@ -217,7 +217,7 @@ func (c *Chain) requestBody(signing EcKey, kid []byte) ([]byte, error) {
       return nil, err
    }
    signedDigest := sha256.Sum256(signedData)
-   r, s, err := ecdsa.Sign(Fill('B'), signing[0], signedDigest[:])
+   r, s, err := ecdsa.Sign(nil, signing[0], signedDigest[:])
    if err != nil {
       return nil, err
    }

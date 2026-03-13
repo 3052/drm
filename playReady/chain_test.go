@@ -10,6 +10,69 @@ import (
    "testing"
 )
 
+func TestChain(t *testing.T) {
+   data, err := os.ReadFile(SL2000.dir + SL2000.g1)
+   if err != nil {
+      t.Fatal(err)
+   }
+   var certificate Chain
+   err = certificate.Decode(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = os.ReadFile(SL2000.dir + SL2000.z1)
+   if err != nil {
+      t.Fatal(err)
+   }
+   var z1 EcKey
+   err = z1.Decode(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+
+   var signingKey EcKey
+   err = signingKey.Generate()
+   if err != nil {
+      t.Fatal(err)
+   }
+
+   var encryptKey EcKey
+   err = encryptKey.Generate()
+   if err != nil {
+      t.Fatal(err)
+   }
+
+   err = certificate.CreateLeaf(&z1, &signingKey, &encryptKey)
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(SL2000.dir+"/chain.txt", certificate.Encode())
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = encryptKey.Private()
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(SL2000.dir+"/encrypt_key.txt", data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = signingKey.Private()
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(SL2000.dir+"/signing_key.txt", data)
+   if err != nil {
+      t.Fatal(err)
+   }
+}
+
+func write_file(name string, data []byte) error {
+   log.Println("WriteFile", name)
+   return os.WriteFile(name, data, os.ModePerm)
+}
+
 var SL2000 = struct {
    dir string
    g1  string
@@ -62,13 +125,19 @@ func TestKey(t *testing.T) {
       t.Fatal(err)
    }
    var signingKey EcKey
-   signingKey.decode(data)
+   err = signingKey.Decode(data)
+   if err != nil {
+      t.Fatal(err)
+   }
    data, err = os.ReadFile(SL2000.dir + "/encrypt_key.txt")
    if err != nil {
       t.Fatal(err)
    }
    var encryptKey EcKey
-   encryptKey.decode(data)
+   err = encryptKey.Decode(data)
+   if err != nil {
+      t.Fatal(err)
+   }
    for _, test := range key_tests {
       log.Print(test.url)
       kid, err := hex.DecodeString(test.kid_wv)
@@ -105,51 +174,4 @@ func TestKey(t *testing.T) {
          t.Fatal(".Key")
       }
    }
-}
-
-func TestChain(t *testing.T) {
-   data, err := os.ReadFile(SL2000.dir + SL2000.g1)
-   if err != nil {
-      t.Fatal(err)
-   }
-   var certificate Chain
-   err = certificate.Decode(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = os.ReadFile(SL2000.dir + SL2000.z1)
-   if err != nil {
-      t.Fatal(err)
-   }
-   var z1 EcKey
-   z1.decode(data)
-   signingKey, err := Fill('S').key()
-   if err != nil {
-      t.Fatal(err)
-   }
-   encryptKey, err := Fill('E').key()
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = certificate.CreateLeaf(&z1, signingKey, encryptKey)
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(SL2000.dir+"/chain.txt", certificate.Encode())
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(SL2000.dir+"/signing_key.txt", signingKey.Private())
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(SL2000.dir+"/encrypt_key.txt", encryptKey.Private())
-   if err != nil {
-      t.Fatal(err)
-   }
-}
-
-func write_file(name string, data []byte) error {
-   log.Println("WriteFile", name)
-   return os.WriteFile(name, data, os.ModePerm)
 }

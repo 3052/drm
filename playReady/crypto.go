@@ -34,23 +34,7 @@ func xorKey(a, b []byte) []byte {
    return c
 }
 
-type Fill byte
-
-func (f Fill) Read(data []byte) (int, error) {
-   for index := range data {
-      data[index] = byte(f)
-   }
-   return len(data), nil
-}
-
-// they downgrade certs from the cert digest (hash of the signing key)
-func (f Fill) key() (*EcKey, error) {
-   key, err := ecdsa.GenerateKey(elliptic.P256(), f)
-   if err != nil {
-      return nil, err
-   }
-   return &EcKey{key}, nil
-}
+// Fill type removed as requested.
 
 func elGamalEncrypt(data, key *ecdsa.PublicKey) []byte {
    y := make([]byte, 32)
