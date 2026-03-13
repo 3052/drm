@@ -46,7 +46,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   data, err = encryptKey.Private()
+   data, err = PrivateKeyBytes(encryptKey)
    if err != nil {
       t.Fatal(err)
    }
@@ -54,7 +54,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   data, err = signingKey.Private()
+   data, err = PrivateKeyBytes(signingKey)
    if err != nil {
       t.Fatal(err)
    }
@@ -154,8 +154,7 @@ func TestKey(t *testing.T) {
             t.Fatal(err)
          }
       }()
-      // Calls exported method on EcKey
-      licenseData, err := encryptKey.DecryptLicense(data)
+      licenseData, err := DecryptLicense(encryptKey, data)
       if err != nil {
          t.Fatal(err)
       }

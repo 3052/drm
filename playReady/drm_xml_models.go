@@ -1,8 +1,6 @@
 package playReady
 
-import (
-   "encoding/xml"
-)
+import "encoding/xml"
 
 type WrmHeaderData struct {
    ProtectInfo ProtectInfo `xml:"PROTECTINFO"`

@@ -10,6 +10,8 @@ import (
    "log"
 )
 
+const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
+
 type ContentKey struct {
    KeyID      [16]byte
    KeyType    uint16
@@ -67,11 +69,13 @@ func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
       ci[i] = decrypted[i*2]
       ck[i] = decrypted[i*2+1]
    }
-   magicConstantZero, err := c.magicConstantZero()
+
+   magicZero, err := hex.DecodeString(magicConstantZero)
    if err != nil {
       return err
    }
-   rgbUplinkXkey := xorKey(ck[:], magicConstantZero)
+
+   rgbUplinkXkey := xorKey(ck[:], magicZero)
    contentKeyPrime, err := aesEcbEncrypt(rgbUplinkXkey, ck[:])
    if err != nil {
       return err
@@ -98,62 +102,33 @@ func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
    return nil
 }
 
-// magicConstantZero returns a specific hex-decoded byte slice.
-func (c *ContentKey) magicConstantZero() ([]byte, error) {
-   return hex.DecodeString("7ee9ed4af773224f00b8ea7efb027cbb")
-}
-
-type EcKey [1]*ecdsa.PrivateKey
-
 // GenerateEcKey creates a new P-256 private key and returns it.
-func GenerateEcKey() (*EcKey, error) {
-   priv, err := ecdsa.GenerateKey(elliptic.P256(), nil)
-   if err != nil {
-      return nil, err
-   }
-   return &EcKey{priv}, nil
+func GenerateEcKey() (*ecdsa.PrivateKey, error) {
+   return ecdsa.GenerateKey(elliptic.P256(), nil)
 }
 
-// DecodeEcKey decodes a raw private key byte slice into a new EcKey.
-func DecodeEcKey(data []byte) (*EcKey, error) {
-   if len(data) != 32 {
-      return nil, errors.New("invalid private key length, expected 32 bytes")
-   }
-
-   priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
-   if err != nil {
-      return nil, err
-   }
-   return &EcKey{priv}, nil
+// DecodeEcKey decodes a raw private key byte slice into a new ecdsa.PrivateKey.
+func DecodeEcKey(data []byte) (*ecdsa.PrivateKey, error) {
+   return ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
 }
 
-// Private returns the private key bytes.
-func (e EcKey) Private() ([]byte, error) {
-   if e[0] == nil {
-      return nil, errors.New("private key is nil")
-   }
-   ecdhKey, err := e[0].ECDH()
+// PrivateKeyBytes returns the private key bytes.
+func PrivateKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.ECDH()
    if err != nil {
       return nil, err
    }
    return ecdhKey.Bytes(), nil
 }
 
-// Public returns the public key bytes.
-func (e *EcKey) Public() ([]byte, error) {
-   if e[0] == nil {
-      return nil, errors.New("private key is nil")
-   }
-   ecdhKey, err := e[0].PublicKey.ECDH()
+// PublicKeyBytes returns the public key bytes.
+func PublicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.PublicKey.ECDH()
    if err != nil {
       return nil, err
    }
-   pubBytes := ecdhKey.Bytes()
-   if len(pubBytes) > 0 {
-      // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
-      return pubBytes[1:], nil
-   }
-   return nil, errors.New("invalid public key length")
+   // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
+   return ecdhKey.Bytes()[1:], nil
 }
 
 type eccKey struct {
@@ -252,10 +227,9 @@ type xmlKey struct {
 }
 
 func (x *xmlKey) New() error {
-   privBytes := make([]byte, 32)
-   privBytes[31] = 1
+   privBytes := [32]byte{1}
 
-   privECDH, err := ecdh.P256().NewPrivateKey(privBytes)
+   privECDH, err := ecdh.P256().NewPrivateKey(privBytes[:])
    if err != nil {
       return err
    }

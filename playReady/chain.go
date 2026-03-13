@@ -104,8 +104,8 @@ func (c *Chain) verify() bool {
 }
 
 // CreateLeaf creates a new leaf certificate and adds it to the chain.
-func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
-   modelPub, err := modelKey.Public()
+func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
+   modelPub, err := PublicKeyBytes(modelKey)
    if err != nil {
       return err
    }
@@ -119,11 +119,11 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
       return errors.New("cert is not valid")
    }
 
-   signPub, err := signingKey.Public()
+   signPub, err := PublicKeyBytes(signingKey)
    if err != nil {
       return err
    }
-   encPub, err := encryptKey.Public()
+   encPub, err := PublicKeyBytes(encryptKey)
    if err != nil {
       return err
    }
@@ -182,22 +182,19 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
    {
       // Sign the unsigned certificate's data.
       digest := sha256.Sum256(unsignedCert.encode())
-      sigR, sigS, err := ecdsa.Sign(nil, modelKey[0], digest[:])
+      sigR, sigS, err := ecdsa.Sign(nil, modelKey, digest[:])
       if err != nil {
          return err
       }
 
-      // Safely pad signatures to EXACTLY 32 bytes each to prevent out-of-bounds byte shifting
-      rBytes := make([]byte, 32)
-      sBytes := make([]byte, 32)
-      sigR.FillBytes(rBytes)
-      sigS.FillBytes(sBytes)
-
-      sign := append(rBytes, sBytes...)
+      // Safely pad signatures directly into a stack-allocated 64-byte array
+      var sign [64]byte
+      sigR.FillBytes(sign[:32])
+      sigS.FillBytes(sign[32:])
 
       // Initialize the signature data for the new certificate.
       var signatureData ecdsaSignature
-      signatureData.New(sign, modelPub)
+      signatureData.New(sign[:], modelPub)
       // Create FTLV for the signature.
       var value ftlv
       value.New(1, 8, signatureData.encode())
@@ -216,7 +213,7 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
 }
 
 // GenerateLicenseRequest creates the XML body for a license acquisition request.
-func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, error) {
+func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([]byte, error) {
    var key xmlKey
    err := key.New()
    if err != nil {
@@ -247,16 +244,15 @@ func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, erro
       return nil, err
    }
    signedDigest := sha256.Sum256(signedData)
-   sigR, sigS, err := ecdsa.Sign(nil, signing[0], signedDigest[:])
+   sigR, sigS, err := ecdsa.Sign(nil, signing, signedDigest[:])
    if err != nil {
       return nil, err
    }
 
-   // Safely pad signatures to prevent shifted indexing
-   rBytes := make([]byte, 32)
-   sBytes := make([]byte, 32)
-   sigR.FillBytes(rBytes)
-   sigS.FillBytes(sBytes)
+   // Safely pad signatures directly into a stack-allocated 64-byte array
+   var sign [64]byte
+   sigR.FillBytes(sign[:32])
+   sigS.FillBytes(sign[32:])
 
    envelope := Envelope{
       Soap: "http://schemas.xmlsoap.org/soap/envelope/",
@@ -269,7 +265,7 @@ func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, erro
                   La:    la,
                   Signature: Signature{
                      SignedInfo:     signedInfo,
-                     SignatureValue: append(rBytes, sBytes...),
+                     SignatureValue: sign[:],
                   },
                },
             },

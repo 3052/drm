@@ -90,12 +90,11 @@ func (c *certificate) verify(pubKey []byte) bool {
       return false
    }
    // Reconstruct the ECDSA public key from the byte slice.
-   // We need to prepend 0x04 to indicate uncompressed coordinates for ParseUncompressedPublicKey
-   encodedKey := make([]byte, 65)
-   encodedKey[0] = 4
+   // We prepend 0x04 to indicate uncompressed coordinates for ParseUncompressedPublicKey
+   encodedKey := [65]byte{4}
    copy(encodedKey[1:], pubKey)
 
-   publicKey, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), encodedKey)
+   publicKey, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), encodedKey[:])
    if err != nil {
       return false
    }

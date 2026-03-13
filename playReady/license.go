@@ -3,6 +3,7 @@ package playReady
 import (
    "bytes"
    "crypto/aes"
+   "crypto/ecdsa"
    "encoding/binary"
    "errors"
    "github.com/emmansun/gmsm/cbcmac"
@@ -93,8 +94,8 @@ func (l *License) decode(data []byte) error {
    return nil
 }
 
-// DecryptLicense processes license data using the provided EcKey and returns the parsed License.
-func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
+// DecryptLicense processes license data using the provided ECDSA private key and returns the parsed License.
+func DecryptLicense(privKey *ecdsa.PrivateKey, data []byte) (*License, error) {
    licenseObj := &License{}
    var envelope EnvelopeResponse
    err := envelope.Unmarshal(data)
@@ -113,14 +114,14 @@ func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
    if err != nil {
       return nil, err
    }
-   pubBytes, err := e.Public()
+   pubBytes, err := PublicKeyBytes(privKey)
    if err != nil {
       return nil, err
    }
    if !bytes.Equal(licenseObj.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
-   err = licenseObj.ContentKey.decrypt(e[0], licenseObj.AuxKeyObject)
+   err = licenseObj.ContentKey.decrypt(privKey, licenseObj.AuxKeyObject)
    if err != nil {
       return nil, err
    }

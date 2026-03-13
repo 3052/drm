@@ -6,7 +6,6 @@ import (
    "crypto/elliptic"
    "encoding/binary"
    "encoding/hex"
-   "errors"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
    "math/big"
@@ -38,10 +37,9 @@ func xorKey(left, right []byte) []byte {
 // elGamalEncrypt encrypts data using the provided public key.
 // Note: Go syntax implicitly makes both `data` and `pubKey` *ecdsa.PublicKey.
 func elGamalEncrypt(data, pubKey *ecdsa.PublicKey) ([]byte, error) {
-   randY := make([]byte, 32)
-   randY[31] = 1 // In a real scenario, this should be truly random
+   randY := [32]byte{1} // In a real scenario, this should be truly random
 
-   c1, err := nistec.NewP256Point().ScalarBaseMult(randY)
+   c1, err := nistec.NewP256Point().ScalarBaseMult(randY[:])
    if err != nil {
       return nil, err
    }
@@ -56,7 +54,7 @@ func elGamalEncrypt(data, pubKey *ecdsa.PublicKey) ([]byte, error) {
       return nil, err
    }
 
-   sharedSec, err := nistec.NewP256Point().ScalarMult(keyPoint, randY)
+   sharedSec, err := nistec.NewP256Point().ScalarMult(keyPoint, randY[:])
    if err != nil {
       return nil, err
    }
@@ -83,11 +81,10 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
    if err != nil {
       return nil, err
    }
-   uncompressed := make([]byte, 65)
-   uncompressed[0] = 4
+   uncompressed := [65]byte{4}
    copy(uncompressed[1:], pubData)
 
-   pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed)
+   pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed[:])
    if err != nil {
       return nil, err
    }
@@ -96,19 +93,17 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
 
 func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error) {
    // C1 component
-   c1Bytes := make([]byte, 65)
-   c1Bytes[0] = 4
+   c1Bytes := [65]byte{4}
    copy(c1Bytes[1:], ciphertext[:64])
-   c1, err := nistec.NewP256Point().SetBytes(c1Bytes)
+   c1, err := nistec.NewP256Point().SetBytes(c1Bytes[:])
    if err != nil {
       return nil, err
    }
 
    // C2 component
-   c2Bytes := make([]byte, 65)
-   c2Bytes[0] = 4
+   c2Bytes := [65]byte{4}
    copy(c2Bytes[1:], ciphertext[64:128])
-   c2, err := nistec.NewP256Point().SetBytes(c2Bytes)
+   c2, err := nistec.NewP256Point().SetBytes(c2Bytes[:])
    if err != nil {
       return nil, err
    }
@@ -127,11 +122,9 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
    // Invert the point for subtraction
    secBytes := sharedSec.Bytes()
 
-   // P-256 field prime = 2^256 - 2^224 + 2^192 + 2^96 - 1
-   primeP, ok := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
-   if !ok {
-      return nil, errors.New("failed to parse P-256 prime")
-   }
+   // Retrieve the P-256 field prime directly from the standard library
+   primeP := elliptic.P256().Params().P
+
    yCoord := new(big.Int).SetBytes(secBytes[33:65])
    yCoord.Sub(primeP, yCoord)
    yCoord.FillBytes(secBytes[33:65])
