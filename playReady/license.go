@@ -8,33 +8,35 @@ import (
    "github.com/emmansun/gmsm/cbcmac"
 )
 
-func (l *license) verify(contentIntegrity []byte) error {
+// Verify checks the integrity of the license using the CMAC of the content integrity key.
+func (l *License) Verify(contentIntegrity []byte) error {
    data := l.encode()
-   data = data[:len(data)-int(l.signature.Length)]
+   data = data[:len(data)-int(l.Signature.Length)]
    block, err := aes.NewCipher(contentIntegrity)
    if err != nil {
       return err
    }
    data = cbcmac.NewCMAC(block, aes.BlockSize).MAC(data)
-   if !bytes.Equal(data, l.signature.Data) {
+   if !bytes.Equal(data, l.Signature.Data) {
       return errors.New("failed to decrypt the keys")
    }
    return nil
 }
 
-type license struct {
+// License represents a parsed PlayReady license.
+type License struct {
    Magic          [4]byte
    Offset         uint16
    Version        uint16
    RightsID       [16]byte
    OuterContainer ftlv
-   contentKey     *ContentKey
-   eccKey         *eccKey
-   signature      *signature
-   auxKeyObject   *auxKeys
+   ContentKey     *ContentKey
+   EccKey         *eccKey
+   Signature      *signature
+   AuxKeyObject   *auxKeys
 }
 
-func (l *license) encode() []byte {
+func (l *License) encode() []byte {
    data := l.Magic[:]
    data = binary.BigEndian.AppendUint16(data, l.Offset)
    data = binary.BigEndian.AppendUint16(data, l.Version)
@@ -42,7 +44,7 @@ func (l *license) encode() []byte {
    return append(data, l.OuterContainer.encode()...)
 }
 
-func (l *license) decode(data []byte) error {
+func (l *License) decode(data []byte) error {
    n := copy(l.Magic[:], data)
    data = data[n:]
    l.Offset = binary.BigEndian.Uint16(data)
@@ -68,22 +70,22 @@ func (l *license) decode(data []byte) error {
             n2 += value1.decode(value.Value[n2:])
             switch xmrType(value1.Type) {
             case contentKeyEntryType: // 10
-               l.contentKey = &ContentKey{}
-               l.contentKey.decode(value1.Value)
+               l.ContentKey = &ContentKey{}
+               l.ContentKey.decode(value1.Value)
             case deviceKeyEntryType: // 42
-               l.eccKey = &eccKey{}
-               l.eccKey.decode(value1.Value)
+               l.EccKey = &eccKey{}
+               l.EccKey.decode(value1.Value)
             case auxKeyEntryType: // 81
-               l.auxKeyObject = &auxKeys{}
-               l.auxKeyObject.decode(value1.Value)
+               l.AuxKeyObject = &auxKeys{}
+               l.AuxKeyObject.decode(value1.Value)
             default:
                return errors.New("FTLV.type")
             }
          }
       case signatureEntryType: // 11
-         l.signature = &signature{}
-         l.signature.decode(value.Value)
-         l.signature.Length = uint16(value.Length)
+         l.Signature = &signature{}
+         l.Signature.decode(value.Value)
+         l.Signature.Length = uint16(value.Length)
       default:
          return errors.New("FTLV.type")
       }
@@ -91,11 +93,13 @@ func (l *license) decode(data []byte) error {
    return nil
 }
 
-func (l *license) decrypt(encrypt EcKey, data []byte) error {
+// DecryptLicense processes license data using the provided EcKey and returns the parsed License.
+func (e *EcKey) DecryptLicense(data []byte) (*License, error) {
+   l := &License{}
    var envelope EnvelopeResponse
    err := envelope.Unmarshal(data)
    if err != nil {
-      return err
+      return nil, err
    }
    err = l.decode(envelope.
       Body.
@@ -107,14 +111,18 @@ func (l *license) decrypt(encrypt EcKey, data []byte) error {
       License,
    )
    if err != nil {
-      return err
+      return nil, err
    }
-   if !bytes.Equal(l.eccKey.Value, encrypt.Public()) {
-      return errors.New("license response is not for this device")
+   if !bytes.Equal(l.EccKey.Value, e.Public()) {
+      return nil, errors.New("license response is not for this device")
    }
-   err = l.contentKey.decrypt(encrypt[0], l.auxKeyObject)
+   err = l.ContentKey.decrypt(e[0], l.AuxKeyObject)
    if err != nil {
-      return err
+      return nil, err
    }
-   return l.verify(l.contentKey.Integrity[:])
+   err = l.Verify(l.ContentKey.Integrity[:])
+   if err != nil {
+      return nil, err
+   }
+   return l, nil
 }

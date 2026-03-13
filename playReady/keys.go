@@ -37,7 +37,10 @@ func (c *ContentKey) decrypt(key *ecdsa.PrivateKey, auxKeys *auxKeys) error {
    log.Println("PlayReady cipher type", c.CipherType)
    switch c.CipherType {
    case 3:
-      decrypted := elGamalDecrypt(c.Value, key)
+      decrypted, err := elGamalDecrypt(c.Value, key)
+      if err != nil {
+         return err
+      }
       n := copy(c.Integrity[:], decrypted)
       decrypted = decrypted[n:]
       copy(c.Key[:], decrypted)
@@ -52,7 +55,10 @@ func (c *ContentKey) scalable(key *ecdsa.PrivateKey, aux *auxKeys) error {
    rootKeyInfo := c.Value[:144]
    rootKey := rootKeyInfo[128:]
    leafKeys := c.Value[144:]
-   decrypted := elGamalDecrypt(rootKeyInfo[:128], key)
+   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], key)
+   if err != nil {
+      return err
+   }
    var (
       ci [16]byte
       ck [16]byte
@@ -99,18 +105,17 @@ func (*ContentKey) magicConstantZero() ([]byte, error) {
 
 type EcKey [1]*ecdsa.PrivateKey
 
-// Generate creates a new P-256 private key and assigns it to the EcKey.
-func (e *EcKey) Generate() error {
+// GenerateEcKey creates a new P-256 private key and returns it.
+func GenerateEcKey() (*EcKey, error) {
    k, err := ecdsa.GenerateKey(elliptic.P256(), nil)
    if err != nil {
-      return err
+      return nil, err
    }
-   e[0] = k
-   return nil
+   return &EcKey{k}, nil
 }
 
-// Decode decodes a raw private key byte slice into the EcKey.
-func (e *EcKey) Decode(data []byte) error {
+// DecodeEcKey decodes a raw private key byte slice into a new EcKey.
+func DecodeEcKey(data []byte) (*EcKey, error) {
    d := make([]byte, 32)
    if len(data) > 32 {
       copy(d, data[len(data)-32:])
@@ -120,10 +125,9 @@ func (e *EcKey) Decode(data []byte) error {
 
    priv, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), d)
    if err != nil {
-      return err
+      return nil, err
    }
-   e[0] = priv
-   return nil
+   return &EcKey{priv}, nil
 }
 
 // Private returns the private key bytes.
@@ -142,7 +146,7 @@ func (e EcKey) Private() ([]byte, error) {
 func (e *EcKey) Public() []byte {
    if e[0] != nil {
       b, err := e[0].PublicKey.Bytes()
-      if err == nil && len(b) == 65 {
+      if err == nil && len(b) > 0 {
          // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
          return b[1:]
       }
@@ -245,17 +249,26 @@ type xmlKey struct {
    X         [32]byte
 }
 
-func (x *xmlKey) New() {
+// Generate now returns an error to handle private key generation failures
+func (x *xmlKey) Generate() error {
    d := make([]byte, 32)
    d[31] = 1
 
-   if privECDH, err := ecdh.P256().NewPrivateKey(d); err == nil {
-      pubBytes := privECDH.PublicKey().Bytes()
-      if pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes); err == nil && pub != nil {
-         x.PublicKey = *pub
-      }
-      copy(x.X[:], pubBytes[1:33])
+   privECDH, err := ecdh.P256().NewPrivateKey(d)
+   if err != nil {
+      return err
    }
+   pubBytes := privECDH.PublicKey().Bytes()
+   pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes)
+   if err != nil {
+      return err
+   }
+   if pub == nil {
+      return errors.New("public key parsed as nil")
+   }
+   x.PublicKey = *pub
+   copy(x.X[:], pubBytes[1:33])
+   return nil
 }
 
 func (x *xmlKey) aesIv() []byte {

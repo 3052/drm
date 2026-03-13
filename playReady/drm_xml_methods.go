@@ -47,7 +47,17 @@ func (s *SignedInfo) Marshal() ([]byte, error) {
    return xml.Marshal(s)
 }
 
-func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) La {
+// newLa now returns (La, error) because key generation and encryption can fail.
+func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
+   genKey, err := elGamalKeyGeneration()
+   if err != nil {
+      return La{}, err
+   }
+   cipherValue, err := elGamalEncrypt(m, genKey)
+   if err != nil {
+      return La{}, err
+   }
+
    return La{
       XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
       Id:      "SignedData",
@@ -83,7 +93,7 @@ func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) La {
                   KeyName: "WMRMServer",
                },
                CipherData: CipherData{
-                  CipherValue: elGamalEncrypt(m, elGamalKeyGeneration()),
+                  CipherValue: cipherValue,
                },
             },
          },
@@ -91,5 +101,5 @@ func newLa(m *ecdsa.PublicKey, cipherData, kid []byte) La {
             CipherValue: cipherData,
          },
       },
-   }
+   }, nil
 }

@@ -15,8 +15,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var certificate Chain
-   err = certificate.Decode(data)
+   certificate, err := DecodeChain(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -24,25 +23,22 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var z1 EcKey
-   err = z1.Decode(data)
+   z1, err := DecodeEcKey(data)
    if err != nil {
       t.Fatal(err)
    }
 
-   var signingKey EcKey
-   err = signingKey.Generate()
+   signingKey, err := GenerateEcKey()
    if err != nil {
       t.Fatal(err)
    }
 
-   var encryptKey EcKey
-   err = encryptKey.Generate()
+   encryptKey, err := GenerateEcKey()
    if err != nil {
       t.Fatal(err)
    }
 
-   err = certificate.CreateLeaf(&z1, &signingKey, &encryptKey)
+   err = certificate.CreateLeaf(z1, signingKey, encryptKey)
    if err != nil {
       t.Fatal(err)
    }
@@ -115,8 +111,7 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var certificate Chain
-   err = certificate.Decode(data)
+   certificate, err := DecodeChain(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -124,8 +119,7 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var signingKey EcKey
-   err = signingKey.Decode(data)
+   signingKey, err := DecodeEcKey(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -133,8 +127,7 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   var encryptKey EcKey
-   err = encryptKey.Decode(data)
+   encryptKey, err := DecodeEcKey(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -145,7 +138,8 @@ func TestKey(t *testing.T) {
          t.Fatal(err)
       }
       UuidOrGuid(kid)
-      data, err = certificate.requestBody(signingKey, kid)
+      // Calls generated exported function
+      data, err = certificate.GenerateLicenseRequest(signingKey, kid)
       if err != nil {
          t.Fatal(err)
       }
@@ -160,12 +154,13 @@ func TestKey(t *testing.T) {
             t.Fatal(err)
          }
       }()
-      var license_data license
-      err = license_data.decrypt(encryptKey, data)
+      // Calls exported method on EcKey
+      licenseData, err := encryptKey.DecryptLicense(data)
       if err != nil {
          t.Fatal(err)
       }
-      content := license_data.contentKey
+      // Accesses exported field
+      content := licenseData.ContentKey
       UuidOrGuid(content.KeyID[:])
       if hex.EncodeToString(content.KeyID[:]) != test.kid_wv {
          t.Fatal(".KeyID")

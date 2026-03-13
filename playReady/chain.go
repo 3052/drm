@@ -44,11 +44,12 @@ type Chain struct {
    certs     []certificate
 }
 
-// Decode decodes a byte slice into the Chain structure.
-func (c *Chain) Decode(data []byte) error {
+// DecodeChain decodes a byte slice into a new Chain structure.
+func DecodeChain(data []byte) (*Chain, error) {
+   c := &Chain{}
    n := copy(c.magic[:], data)
    if string(c.magic[:]) != "CHAI" {
-      return errors.New("failed to find chain magic")
+      return nil, errors.New("failed to find chain magic")
    }
    data = data[n:]
    c.version = binary.BigEndian.Uint32(data)
@@ -64,12 +65,12 @@ func (c *Chain) Decode(data []byte) error {
       var cert certificate
       n, err := cert.decode(data)
       if err != nil {
-         return err
+         return nil, err
       }
       c.certs[i] = cert
       data = data[n:]
    }
-   return nil
+   return c, nil
 }
 
 // Encode encodes the Chain into a byte slice.
@@ -192,14 +193,25 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *EcKey) error {
    return nil
 }
 
-func (c *Chain) requestBody(signing EcKey, kid []byte) ([]byte, error) {
+// GenerateLicenseRequest creates the XML body for a license acquisition request.
+func (c *Chain) GenerateLicenseRequest(signing *EcKey, kid []byte) ([]byte, error) {
    var key xmlKey
-   key.New()
+   // Renamed from New() to Generate() to reflect that it returns an error
+   if err := key.Generate(); err != nil {
+      return nil, err
+   }
+
    cipherData, err := c.cipherData(&key)
    if err != nil {
       return nil, err
    }
-   la := newLa(&key.PublicKey, cipherData, kid)
+
+   // newLa now returns an error because encryption can fail
+   la, err := newLa(&key.PublicKey, cipherData, kid)
+   if err != nil {
+      return nil, err
+   }
+
    laData, err := la.Marshal()
    if err != nil {
       return nil, err
