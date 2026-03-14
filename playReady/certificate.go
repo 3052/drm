@@ -31,17 +31,100 @@ const (
    objTypeSecurityVersion2 = 0x0011
 )
 
+type certRecord struct {
+   Flags            uint16
+   Type             uint16
+   UnknownData      []byte
+   CertificateInfo  *certificateInfo
+   DeviceInfo       *device
+   Features         *features
+   KeyInfo          *keyInfo
+   ManufacturerInfo *manufacturer
+   SignatureData    *ecdsaSignature
+}
+
+func (r *certRecord) decode(data []byte) int {
+   r.Flags = binary.BigEndian.Uint16(data)
+   n := 2
+   r.Type = binary.BigEndian.Uint16(data[n:])
+   n += 2
+   length := binary.BigEndian.Uint32(data[n:])
+   n += 4
+   valBytes := data[n:][:length-8]
+   n += len(valBytes)
+
+   switch r.Type {
+   case objTypeBasic:
+      info := &certificateInfo{}
+      info.decode(valBytes)
+      r.CertificateInfo = info
+   case objTypeDevice:
+      dev := &device{}
+      dev.decode(valBytes)
+      r.DeviceInfo = dev
+   case objTypeFeature:
+      feat := &features{}
+      feat.decode(valBytes)
+      r.Features = feat
+   case objTypeKey:
+      key := &keyInfo{}
+      key.decode(valBytes)
+      r.KeyInfo = key
+   case objTypeManufacturer:
+      man := &manufacturer{}
+      man.decode(valBytes)
+      r.ManufacturerInfo = man
+   case objTypeSignature:
+      sig := &ecdsaSignature{}
+      sig.decode(valBytes)
+      r.SignatureData = sig
+   default:
+      r.UnknownData = valBytes
+   }
+   return n
+}
+
+func (r *certRecord) encode() []byte {
+   // Type 0xFFFF is our custom marker for trailing unformatted padding
+   if r.Type == 0xFFFF {
+      return r.UnknownData
+   }
+
+   var valBytes []byte
+   if r.CertificateInfo != nil {
+      valBytes = r.CertificateInfo.encode()
+   } else if r.DeviceInfo != nil {
+      valBytes = r.DeviceInfo.encode()
+   } else if r.Features != nil {
+      valBytes = r.Features.encode()
+   } else if r.KeyInfo != nil {
+      valBytes = r.KeyInfo.encode()
+   } else if r.ManufacturerInfo != nil {
+      valBytes = r.ManufacturerInfo.encode()
+   } else if r.SignatureData != nil {
+      valBytes = r.SignatureData.encode()
+   } else {
+      valBytes = r.UnknownData
+   }
+
+   data := binary.BigEndian.AppendUint16(nil, r.Flags)
+   data = binary.BigEndian.AppendUint16(data, r.Type)
+   data = binary.BigEndian.AppendUint32(data, uint32(len(valBytes)+8))
+   return append(data, valBytes...)
+}
+
 type certificate struct {
-   magic             [4]byte
-   version           uint32
-   length            uint32
-   lengthToSignature uint32
-   rawData           []byte
-   certificateInfo   *certificateInfo
-   features          *features
-   keyInfo           *keyInfo
-   manufacturerInfo  *manufacturer
-   signatureData     *ecdsaSignature
+   magic   [4]byte
+   version uint32
+   records []certRecord
+
+   // Helper pointers mapped directly to the structs inside records
+   certificateInfo  *certificateInfo
+   deviceInfo       *device
+   features         *features
+   keyInfo          *keyInfo
+   manufacturerInfo *manufacturer
+   signatureData    *ecdsaSignature
 }
 
 // decode decodes a byte slice into the Cert structure.
@@ -52,32 +135,45 @@ func (c *certificate) decode(data []byte) (int, error) {
    }
    c.version = binary.BigEndian.Uint32(data[n:])
    n += 4
-   c.length = binary.BigEndian.Uint32(data[n:])
+   length := binary.BigEndian.Uint32(data[n:])
    n += 4
-   c.lengthToSignature = binary.BigEndian.Uint32(data[n:])
+   _ = binary.BigEndian.Uint32(data[n:]) // skip lengthToSignature, dynamically evaluated
    n += 4
-   c.rawData = data[n:][:c.length-16]
-   n += len(c.rawData)
+
+   certDataLen := int(length - 16)
+   certData := data[n : n+certDataLen]
+   n += certDataLen
+
    var n1 int
-   for n1 < len(c.rawData) {
-      var value ftlv
-      n1 += value.decode(c.rawData[n1:])
-      switch value.Type {
+   for n1 < len(certData) {
+      // Safeguard against malformed/unformatted trailing padding zeroes
+      if len(certData)-n1 < 8 {
+         c.records = append(c.records, certRecord{Type: 0xFFFF, UnknownData: certData[n1:]})
+         break
+      }
+      recLen := binary.BigEndian.Uint32(certData[n1+4 : n1+8])
+      if recLen < 8 {
+         c.records = append(c.records, certRecord{Type: 0xFFFF, UnknownData: certData[n1:]})
+         break
+      }
+
+      var record certRecord
+      n1 += record.decode(certData[n1:])
+      c.records = append(c.records, record)
+
+      switch record.Type {
       case objTypeBasic:
-         c.certificateInfo = &certificateInfo{}
-         c.certificateInfo.decode(value.Value)
+         c.certificateInfo = record.CertificateInfo
+      case objTypeDevice:
+         c.deviceInfo = record.DeviceInfo
       case objTypeFeature:
-         c.features = &features{}
-         c.features.decode(value.Value)
+         c.features = record.Features
       case objTypeKey:
-         c.keyInfo = &keyInfo{}
-         c.keyInfo.decode(value.Value)
+         c.keyInfo = record.KeyInfo
       case objTypeManufacturer:
-         c.manufacturerInfo = &manufacturer{}
-         c.manufacturerInfo.decode(value.Value)
+         c.manufacturerInfo = record.ManufacturerInfo
       case objTypeSignature:
-         c.signatureData = &ecdsaSignature{}
-         c.signatureData.decode(value.Value)
+         c.signatureData = record.SignatureData
       }
    }
    return n, nil
@@ -85,12 +181,10 @@ func (c *certificate) decode(data []byte) (int, error) {
 
 // verify verifies the signature of the certificate using the provided public key.
 func (c *certificate) verify(pubKey []byte) bool {
-   // Check if the issuer key in the signature matches the provided public key.
-   if !bytes.Equal(c.signatureData.IssuerKey, pubKey) {
+   if c.signatureData == nil || !bytes.Equal(c.signatureData.IssuerKey, pubKey) {
       return false
    }
-   // Reconstruct the ECDSA public key from the byte slice.
-   // We prepend 0x04 to indicate uncompressed coordinates for ParseUncompressedPublicKey
+
    encodedKey := [65]byte{4}
    copy(encodedKey[1:], pubKey)
 
@@ -99,36 +193,43 @@ func (c *certificate) verify(pubKey []byte) bool {
       return false
    }
 
-   // Get the data that was signed (up to lengthToSignature).
    data := c.encode()
-   data = data[:c.lengthToSignature]
-   signatureDigest := sha256.Sum256(data)
-   // Extract R and S components from the signature data.
+   // Extract the dynamically generated lengthToSignature directly from the header bytes
+   lengthToSig := binary.BigEndian.Uint32(data[12:16])
+   signatureDigest := sha256.Sum256(data[:lengthToSig])
+
    sign := c.signatureData.SignatureData
    r := new(big.Int).SetBytes(sign[:32])
    s := new(big.Int).SetBytes(sign[32:])
-   // Verify the signature.
-   return ecdsa.Verify(publicKey, signatureDigest[:], r, s)
-}
 
-// newNoSig initializes a new Cert without signature data.
-func (c *certificate) newNoSig(data []byte) {
-   copy(c.magic[:], "CERT")
-   c.version = 1
-   // length = length of raw data + header size (16) + signature size (144)
-   c.length = uint32(len(data)) + 16 + 144
-   // lengthToSignature = length of raw data + header size (16)
-   c.lengthToSignature = uint32(len(data)) + 16
-   c.rawData = data
+   return ecdsa.Verify(publicKey, signatureDigest[:], r, s)
 }
 
 // encode encodes the Cert structure into a byte slice.
 func (c *certificate) encode() []byte {
-   data := c.magic[:]
-   data = binary.BigEndian.AppendUint32(data, c.version)
-   data = binary.BigEndian.AppendUint32(data, c.length)
-   data = binary.BigEndian.AppendUint32(data, c.lengthToSignature)
-   return append(data, c.rawData...)
+   var raw []byte
+   var lengthToSignature uint32
+
+   for _, record := range c.records {
+      if record.Type == objTypeSignature {
+         lengthToSignature = uint32(16 + len(raw))
+      }
+      raw = append(raw, record.encode()...)
+   }
+
+   if lengthToSignature == 0 {
+      lengthToSignature = uint32(16 + len(raw))
+   }
+
+   length := uint32(16 + len(raw))
+
+   magicBytes := make([]byte, 4)
+   copy(magicBytes, c.magic[:])
+   data := binary.BigEndian.AppendUint32(magicBytes, c.version)
+   data = binary.BigEndian.AppendUint32(data, length)
+   data = binary.BigEndian.AppendUint32(data, lengthToSignature)
+   data = append(data, raw...)
+   return data
 }
 
 type certificateInfo struct {
@@ -142,7 +243,8 @@ type certificateInfo struct {
 }
 
 func (c *certificateInfo) encode() []byte {
-   data := c.certificateId[:]
+   data := make([]byte, 0, 80)
+   data = append(data, c.certificateId[:]...)
    data = binary.BigEndian.AppendUint32(data, c.securityLevel)
    data = binary.BigEndian.AppendUint32(data, c.flags)
    data = binary.BigEndian.AppendUint32(data, c.infoType)
@@ -153,9 +255,9 @@ func (c *certificateInfo) encode() []byte {
 
 func (c *certificateInfo) New(securityLevel uint32, digest []byte) {
    c.securityLevel = securityLevel
-   c.infoType = 2 // Assuming infoType 2 is a standard type
+   c.infoType = 2
    copy(c.digest[:], digest)
-   c.expiry = 4294967295 // Max uint32, effectively never expires
+   c.expiry = 4294967295
 }
 
 func (c *certificateInfo) decode(data []byte) {

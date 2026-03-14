@@ -21,7 +21,6 @@ func aesEcbEncrypt(data, key []byte) ([]byte, error) {
    return encData, nil
 }
 
-// xorKey performs XOR operation on two byte slices.
 func xorKey(left, right []byte) []byte {
    if len(left) != len(right) {
       panic("slices have different lengths")
@@ -33,10 +32,8 @@ func xorKey(left, right []byte) []byte {
    return result
 }
 
-// elGamalEncrypt encrypts data using the provided public key.
-// Note: Go syntax implicitly makes both `data` and `pubKey` *ecdsa.PublicKey.
 func elGamalEncrypt(data, pubKey *ecdsa.PublicKey) ([]byte, error) {
-   randY := [32]byte{1} // In a real scenario, this should be truly random
+   randY := [32]byte{1}
 
    c1, err := nistec.NewP256Point().ScalarBaseMult(randY[:])
    if err != nil {
@@ -91,7 +88,6 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
 }
 
 func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error) {
-   // C1 component
    c1Bytes := [65]byte{4}
    copy(c1Bytes[1:], ciphertext[:64])
    c1, err := nistec.NewP256Point().SetBytes(c1Bytes[:])
@@ -99,7 +95,6 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
       return nil, err
    }
 
-   // C2 component
    c2Bytes := [65]byte{4}
    copy(c2Bytes[1:], ciphertext[64:128])
    c2, err := nistec.NewP256Point().SetBytes(c2Bytes[:])
@@ -107,7 +102,6 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
       return nil, err
    }
 
-   // Calculate shared secret = C1^privKey
    ecdhKey, err := privKey.ECDH()
    if err != nil {
       return nil, err
@@ -118,10 +112,7 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
       return nil, err
    }
 
-   // Invert the point for subtraction: invSec = -sharedSec
    invSec := nistec.NewP256Point().Negate(sharedSec)
-
-   // Recover message point: mPoint = C2 + (-sharedSec)
    mPoint := nistec.NewP256Point().Add(c2, invSec)
    return mPoint.Bytes()[1:], nil
 }
@@ -130,7 +121,7 @@ type ecdsaSignature struct {
    signatureType   uint16
    signatureLength uint16
    SignatureData   []byte // The actual signature bytes
-   issuerLength    uint32
+   issuerLength    uint32 // Bit length representation
    IssuerKey       []byte // The public key of the issuer that signed this
 }
 
@@ -138,7 +129,7 @@ func (s *ecdsaSignature) New(signatureData, signingKey []byte) {
    s.signatureType = 1
    s.signatureLength = uint16(len(signatureData))
    s.SignatureData = signatureData
-   s.issuerLength = uint32(len(signingKey))
+   s.issuerLength = uint32(len(signingKey)) * 8 // Store as raw bit size, not bytes!
    s.IssuerKey = signingKey
 }
 
@@ -146,7 +137,8 @@ func (s *ecdsaSignature) encode() []byte {
    encBuf := binary.BigEndian.AppendUint16(nil, s.signatureType)
    encBuf = binary.BigEndian.AppendUint16(encBuf, s.signatureLength)
    encBuf = append(encBuf, s.SignatureData...)
-   encBuf = binary.BigEndian.AppendUint32(encBuf, s.issuerLength*8)
+   // No longer multiplying by 8, preventing catastrophic size multiplication
+   encBuf = binary.BigEndian.AppendUint32(encBuf, s.issuerLength)
    return append(encBuf, s.IssuerKey...)
 }
 
@@ -157,6 +149,7 @@ func (s *ecdsaSignature) decode(data []byte) {
    data = data[2:]
    s.SignatureData = data[:s.signatureLength]
    data = data[s.signatureLength:]
+   // Keep reading as direct bit scale without manipulating
    s.issuerLength = binary.BigEndian.Uint32(data)
    data = data[4:]
    s.IssuerKey = data

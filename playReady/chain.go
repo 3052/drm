@@ -36,17 +36,15 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
 
 // Chain represents a chain of certificates.
 type Chain struct {
-   magic     [4]byte
-   version   uint32
-   length    uint32
-   flags     uint32
-   certCount uint32
-   certs     []certificate
+   magic   [4]byte
+   version uint32
+   flags   uint32
+   certs   []certificate
 }
 
 // DecodeChain decodes a byte slice into a new Chain structure.
 func DecodeChain(data []byte) (*Chain, error) {
-   c := &Chain{} // single letter 'c' allowed because it is the return variable
+   c := &Chain{}
    copied := copy(c.magic[:], data)
    if string(c.magic[:]) != "CHAI" {
       return nil, errors.New("failed to find chain magic")
@@ -54,15 +52,15 @@ func DecodeChain(data []byte) (*Chain, error) {
    data = data[copied:]
    c.version = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.length = binary.BigEndian.Uint32(data)
+   _ = binary.BigEndian.Uint32(data) // length (skipping, dynamically evaluated)
    data = data[4:]
    c.flags = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.certCount = binary.BigEndian.Uint32(data)
+   certCount := binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.certs = make([]certificate, c.certCount)
+   c.certs = make([]certificate, certCount)
 
-   for index := range c.certCount {
+   for index := range certCount {
       var cert certificate
       bytesRead, err := cert.decode(data)
       if err != nil {
@@ -76,14 +74,25 @@ func DecodeChain(data []byte) (*Chain, error) {
 
 // Encode encodes the Chain into a byte slice.
 func (c *Chain) Encode() []byte {
-   data := c.magic[:]
-   data = binary.BigEndian.AppendUint32(data, c.version)
-   data = binary.BigEndian.AppendUint32(data, c.length)
-   data = binary.BigEndian.AppendUint32(data, c.flags)
-   data = binary.BigEndian.AppendUint32(data, c.certCount)
+   var certsData []byte
    for _, cert := range c.certs {
-      data = append(data, cert.encode()...)
+      certsData = append(certsData, cert.encode()...)
    }
+
+   magicBytes := make([]byte, 4)
+   copy(magicBytes, c.magic[:])
+   data := binary.BigEndian.AppendUint32(magicBytes, c.version)
+
+   // Chain header is 20 bytes (magic, version, length, flags, certCount)
+   length := uint32(20 + len(certsData))
+   data = binary.BigEndian.AppendUint32(data, length)
+
+   data = binary.BigEndian.AppendUint32(data, c.flags)
+
+   certCount := uint32(len(c.certs))
+   data = binary.BigEndian.AppendUint32(data, certCount)
+
+   data = append(data, certsData...)
    return data
 }
 
@@ -126,33 +135,62 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) e
       return err
    }
 
-   var leafData bytes.Buffer
-
-   // Write all unsigned FTLV records
-   leafData.Write(createCertInfoFtlv(c.certs[0].certificateInfo.securityLevel, signPub))
-   leafData.Write(createDeviceFtlv())
-   leafData.Write(createFeatureFtlv())
-   leafData.Write(createKeyInfoFtlv(signPub, encPub))
-   leafData.Write(createManufacturerFtlv(c.certs[0].manufacturerInfo))
-
-   // Wrap raw buffer data into a temporary unsigned cert to prepare for signing
    var unsignedCert certificate
-   unsignedCert.newNoSig(leafData.Bytes())
+   copy(unsignedCert.magic[:], "CERT")
+   unsignedCert.version = 1
 
-   // Generate the signature FTLV wrapper
-   signatureBytes, err := createSignatureFtlv(unsignedCert.encode(), modelKey, modelPub)
+   var info certificateInfo
+   digest := sha256.Sum256(signPub)
+   info.New(c.certs[0].certificateInfo.securityLevel, digest[:])
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeBasic, CertificateInfo: &info})
+   unsignedCert.certificateInfo = &info
+
+   var dev device
+   dev.New()
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeDevice, DeviceInfo: &dev})
+   unsignedCert.deviceInfo = &dev
+
+   var feat features
+   feat.New(0xD) // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeFeature, Features: &feat})
+   unsignedCert.features = &feat
+
+   var key keyInfo
+   key.New(signPub, encPub)
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeKey, KeyInfo: &key})
+   unsignedCert.keyInfo = &key
+
+   // Reusing model Manufacturer info
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 0, Type: objTypeManufacturer, ManufacturerInfo: c.certs[0].manufacturerInfo})
+   unsignedCert.manufacturerInfo = c.certs[0].manufacturerInfo
+
+   // To compute dynamic lengths properly in encode(), we append a dummy signature
+   // structure so the exact header bytes can be fully calculated for digest signing.
+   var dummySig ecdsaSignature
+   dummySig.New(make([]byte, 64), modelPub)
+   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeSignature, SignatureData: &dummySig})
+
+   certData := unsignedCert.encode()
+   lengthToSig := binary.BigEndian.Uint32(certData[12:16])
+   sigDigest := sha256.Sum256(certData[:lengthToSig])
+
+   // Sign the properly sized bytes
+   sigR, sigS, err := ecdsa.Sign(nil, modelKey, sigDigest[:])
    if err != nil {
       return err
    }
 
-   // Append signature and update final certificate limits
-   leafData.Write(signatureBytes)
-   unsignedCert.length = uint32(leafData.Len()) + 16
-   unsignedCert.rawData = leafData.Bytes()
+   var sign [64]byte
+   sigR.FillBytes(sign[:32])
+   sigS.FillBytes(sign[32:])
 
-   // Prepend to chain
-   c.length += unsignedCert.length
-   c.certCount += 1
+   var signatureData ecdsaSignature
+   signatureData.New(sign[:], modelPub)
+
+   // Replace the dummy signature with the authentic one
+   unsignedCert.records[len(unsignedCert.records)-1].SignatureData = &signatureData
+   unsignedCert.signatureData = &signatureData
+
    c.certs = slices.Insert(c.certs, 0, unsignedCert)
 
    return nil
@@ -195,7 +233,6 @@ func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([
       return nil, err
    }
 
-   // Safely pad signatures directly into a stack-allocated 64-byte array
    var sign [64]byte
    sigR.FillBytes(sign[:32])
    sigS.FillBytes(sign[32:])
@@ -219,75 +256,4 @@ func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([
       },
    }
    return envelope.Marshal()
-}
-
-// createCertInfoFtlv constructs the FTLV for the certificate info (Type 1)
-func createCertInfoFtlv(securityLevel uint32, signPub []byte) []byte {
-   digest := sha256.Sum256(signPub)
-   var info certificateInfo
-   info.New(securityLevel, digest[:])
-
-   var value ftlv
-   value.New(1, 1, info.encode())
-   return value.encode()
-}
-
-// createDeviceFtlv constructs the FTLV for the device (Type 4)
-func createDeviceFtlv() []byte {
-   var device1 device
-   device1.New()
-
-   var value ftlv
-   value.New(1, 4, device1.encode())
-   return value.encode()
-}
-
-// createFeatureFtlv constructs the FTLV for the features (Type 5)
-func createFeatureFtlv() []byte {
-   // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
-   feature := features{
-      entries:  1,
-      features: []uint32{0xD},
-   }
-
-   var value ftlv
-   value.New(1, 5, feature.encode())
-   return value.encode()
-}
-
-// createKeyInfoFtlv constructs the FTLV for the keys (Type 6)
-func createKeyInfoFtlv(signPub []byte, encPub []byte) []byte {
-   var key keyInfo
-   key.New(signPub, encPub)
-
-   var value ftlv
-   value.New(1, 6, key.encode())
-   return value.encode()
-}
-
-// createManufacturerFtlv constructs the FTLV for the manufacturer (Type 7)
-func createManufacturerFtlv(manufacturerInfo *manufacturer) []byte {
-   var value ftlv
-   value.New(0, 7, manufacturerInfo.encode())
-   return value.encode()
-}
-
-// createSignatureFtlv constructs the signed FTLV wrapper (Type 8)
-func createSignatureFtlv(certData []byte, modelKey *ecdsa.PrivateKey, modelPub []byte) ([]byte, error) {
-   digest := sha256.Sum256(certData)
-   sigR, sigS, err := ecdsa.Sign(nil, modelKey, digest[:])
-   if err != nil {
-      return nil, err
-   }
-
-   var sign [64]byte
-   sigR.FillBytes(sign[:32])
-   sigS.FillBytes(sign[32:])
-
-   var signatureData ecdsaSignature
-   signatureData.New(sign[:], modelPub)
-
-   var value ftlv
-   value.New(1, 8, signatureData.encode())
-   return value.encode(), nil
 }

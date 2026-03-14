@@ -52,14 +52,10 @@ const (
 )
 
 func UuidOrGuid(data []byte) {
-   // Data1 (first 4 bytes) - swap endianness in place
    data[0], data[3] = data[3], data[0]
    data[1], data[2] = data[2], data[1]
-   // Data2 (next 2 bytes) - swap endianness in place
    data[4], data[5] = data[5], data[4]
-   // Data3 (next 2 bytes) - swap endianness in place
    data[6], data[7] = data[7], data[6]
-   // Data4 (last 8 bytes) - no change needed, so no operation here
 }
 
 type auxKey struct {
@@ -67,7 +63,6 @@ type auxKey struct {
    Key      [16]byte
 }
 
-// Decode decodes a byte slice into an AuxKey structure.
 func (a *auxKey) decode(data []byte) int {
    a.Location = binary.BigEndian.Uint32(data)
    n := 4
@@ -80,7 +75,6 @@ type auxKeys struct {
    Keys  []auxKey
 }
 
-// Decode decodes a byte slice into an AuxKeys structure.
 func (a *auxKeys) decode(data []byte) {
    a.Count = binary.BigEndian.Uint16(data)
    data = data[2:]
@@ -93,25 +87,28 @@ func (a *auxKeys) decode(data []byte) {
    }
 }
 
-// device represents device capabilities.
 type device struct {
    maxLicenseSize       uint32
    maxHeaderSize        uint32
    maxLicenseChainDepth uint32
 }
 
-// new initializes default device capabilities.
 func (d *device) New() {
    d.maxLicenseSize = 10240
    d.maxHeaderSize = 15360
    d.maxLicenseChainDepth = 2
 }
 
-// encode encodes device capabilities into a byte slice.
 func (d *device) encode() []byte {
    data := binary.BigEndian.AppendUint32(nil, d.maxLicenseSize)
    data = binary.BigEndian.AppendUint32(data, d.maxHeaderSize)
    return binary.BigEndian.AppendUint32(data, d.maxLicenseChainDepth)
+}
+
+func (d *device) decode(data []byte) {
+   d.maxLicenseSize = binary.BigEndian.Uint32(data)
+   d.maxHeaderSize = binary.BigEndian.Uint32(data[4:])
+   d.maxLicenseChainDepth = binary.BigEndian.Uint32(data[8:])
 }
 
 type features struct {
@@ -149,7 +146,6 @@ type ftlv struct {
    Value  []byte
 }
 
-// Encode encodes an FTLV structure into a byte slice.
 func (f *ftlv) encode() []byte {
    data := binary.BigEndian.AppendUint16(nil, f.Flags)
    data = binary.BigEndian.AppendUint16(data, f.Type)
@@ -157,7 +153,6 @@ func (f *ftlv) encode() []byte {
    return append(data, f.Value...)
 }
 
-// New initializes an FTLV structure.
 func (f *ftlv) New(flags, Type int, value []byte) {
    f.Flags = uint16(flags)
    f.Type = uint16(Type)
@@ -165,7 +160,6 @@ func (f *ftlv) New(flags, Type int, value []byte) {
    f.Value = value
 }
 
-// Decode decodes a byte slice into an FTLV structure.
 func (f *ftlv) decode(data []byte) int {
    f.Flags = binary.BigEndian.Uint16(data)
    n := 2
@@ -184,7 +178,6 @@ type signature struct {
    Data   []byte
 }
 
-// decode decodes a byte slice into a Signature structure.
 func (s *signature) decode(data []byte) {
    s.Type = binary.BigEndian.Uint16(data)
    data = data[2:]
