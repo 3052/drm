@@ -1,6 +1,8 @@
+// license.go
 package playReady
 
 import (
+   "41.neocities.org/drm/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/ecdsa"
@@ -9,8 +11,7 @@ import (
    "github.com/emmansun/gmsm/cbcmac"
 )
 
-// Verify checks the integrity of the license using the CMAC of the content integrity key.
-func (l *License) Verify(contentIntegrity []byte) error {
+func (l *License) verify(contentIntegrity []byte) error {
    data := l.encode()
    data = data[:len(data)-int(l.Signature.Length)]
    block, err := aes.NewCipher(contentIntegrity)
@@ -54,11 +55,14 @@ func (l *License) decode(data []byte) error {
    data = data[2:]
    copied = copy(l.RightsID[:], data)
    data = data[copied:]
-   l.OuterContainer.decode(data)
+
+   l.OuterContainer, _ = decodeFtlv(data)
+
    var outerOffset int
    for outerOffset < int(l.OuterContainer.Length)-16 {
-      var outerValue ftlv
-      outerOffset += outerValue.decode(l.OuterContainer.Value[outerOffset:])
+      outerValue, outerN := decodeFtlv(l.OuterContainer.Value[outerOffset:])
+      outerOffset += outerN
+
       switch xmrType(outerValue.Type) {
       case globalPolicyContainerEntryType: // 2
          // Rakuten
@@ -67,25 +71,22 @@ func (l *License) decode(data []byte) error {
       case keyMaterialContainerEntryType: // 9
          var innerOffset int
          for innerOffset < int(outerValue.Length)-16 {
-            var innerValue ftlv
-            innerOffset += innerValue.decode(outerValue.Value[innerOffset:])
+            innerValue, innerN := decodeFtlv(outerValue.Value[innerOffset:])
+            innerOffset += innerN
+
             switch xmrType(innerValue.Type) {
             case contentKeyEntryType: // 10
-               l.ContentKey = &ContentKey{}
-               l.ContentKey.decode(innerValue.Value)
+               l.ContentKey = decodeContentKey(innerValue.Value)
             case deviceKeyEntryType: // 42
-               l.EccKey = &eccKey{}
-               l.EccKey.decode(innerValue.Value)
+               l.EccKey = decodeEccKey(innerValue.Value)
             case auxKeyEntryType: // 81
-               l.AuxKeyObject = &auxKeys{}
-               l.AuxKeyObject.decode(innerValue.Value)
+               l.AuxKeyObject = decodeAuxKeys(innerValue.Value)
             default:
                return errors.New("FTLV.type")
             }
          }
       case signatureEntryType: // 11
-         l.Signature = &signature{}
-         l.Signature.decode(outerValue.Value)
+         l.Signature = decodeSignature(outerValue.Value)
          l.Signature.Length = uint16(outerValue.Length)
       default:
          return errors.New("FTLV.type")
@@ -95,12 +96,15 @@ func (l *License) decode(data []byte) error {
 }
 
 // DecryptLicense processes license data using the provided ECDSA private key and returns the parsed License.
-func DecryptLicense(privKey *ecdsa.PrivateKey, data []byte) (*License, error) {
+func DecryptLicense(encryptKey *ecdsa.PrivateKey, data []byte) (*License, error) {
    l := &License{} // single letter 'l' allowed because it is the return variable
-   var envelope EnvelopeResponse
-   err := envelope.Unmarshal(data)
+   var envelope xml.EnvelopeResponse
+   err := xml.Unmarshal(data, &envelope)
    if err != nil {
       return nil, err
+   }
+   if envelope.Body.Fault != nil {
+      return nil, errors.New(envelope.Body.Fault.Fault)
    }
    err = l.decode(envelope.
       Body.
@@ -114,18 +118,18 @@ func DecryptLicense(privKey *ecdsa.PrivateKey, data []byte) (*License, error) {
    if err != nil {
       return nil, err
    }
-   pubBytes, err := PublicKeyBytes(privKey)
+   pubBytes, err := PublicKeyBytes(encryptKey)
    if err != nil {
       return nil, err
    }
    if !bytes.Equal(l.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
-   err = l.ContentKey.decrypt(privKey, l.AuxKeyObject)
+   err = l.ContentKey.decrypt(encryptKey, l.AuxKeyObject)
    if err != nil {
       return nil, err
    }
-   err = l.Verify(l.ContentKey.Integrity[:])
+   err = l.verify(l.ContentKey.Integrity[:])
    if err != nil {
       return nil, err
    }

@@ -1,72 +1,31 @@
+// drm_xml_methods.go
 package playReady
 
 import (
+   "41.neocities.org/drm/playReady/xml"
    "crypto/ecdsa"
-   "encoding/base64"
-   "encoding/xml"
-   "errors"
 )
 
-func (b Bytes) MarshalText() ([]byte, error) {
-   return base64.StdEncoding.AppendEncode(nil, b), nil
-}
-
-func (b *Bytes) UnmarshalText(data []byte) error {
-   var err error
-   *b, err = base64.StdEncoding.AppendDecode(nil, data)
-   if err != nil {
-      return err
-   }
-   return nil
-}
-
-func (e *Envelope) Marshal() ([]byte, error) {
-   return xml.Marshal(e)
-}
-
-func (e *EnvelopeResponse) Unmarshal(data []byte) error {
-   err := xml.Unmarshal(data, e)
-   if err != nil {
-      return err
-   }
-   if e.Body.Fault != nil {
-      return errors.New(e.Body.Fault.Fault)
-   }
-   return nil
-}
-
-func (d *Data) Marshal() ([]byte, error) {
-   return xml.Marshal(d)
-}
-
-func (l *La) Marshal() ([]byte, error) {
-   return xml.Marshal(l)
-}
-
-func (s *SignedInfo) Marshal() ([]byte, error) {
-   return xml.Marshal(s)
-}
-
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (*xml.La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
-      return La{}, err
+      return nil, err
    }
    cipherValue, err := elGamalEncrypt(pubKey, genKey)
    if err != nil {
-      return La{}, err
+      return nil, err
    }
 
-   return La{
+   return &xml.La{
       XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
       Id:      "SignedData",
       Version: "1",
-      ContentHeader: ContentHeader{
-         WrmHeader: WrmHeader{
+      ContentHeader: xml.ContentHeader{
+         WrmHeader: xml.WrmHeader{
             XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
             Version: "4.0.0.0",
-            Data: WrmHeaderData{
-               ProtectInfo: ProtectInfo{
+            Data: xml.WrmHeaderData{
+               ProtectInfo: xml.ProtectInfo{
                   KeyLen: "16",
                   AlgId:  "AESCTR",
                },
@@ -74,29 +33,29 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
             },
          },
       },
-      EncryptedData: EncryptedData{
+      EncryptedData: xml.EncryptedData{
          XmlNs: "http://www.w3.org/2001/04/xmlenc#",
          Type:  "http://www.w3.org/2001/04/xmlenc#Element",
-         EncryptionMethod: Algorithm{
+         EncryptionMethod: xml.Algorithm{
             Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
          },
-         KeyInfo: KeyInfo{
+         KeyInfo: xml.KeyInfo{
             XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-            EncryptedKey: EncryptedKey{
+            EncryptedKey: xml.EncryptedKey{
                XmlNs: "http://www.w3.org/2001/04/xmlenc#",
-               EncryptionMethod: Algorithm{
+               EncryptionMethod: xml.Algorithm{
                   Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
                },
-               KeyInfo: EncryptedKeyInfo{
+               KeyInfo: xml.EncryptedKeyInfo{
                   XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
                   KeyName: "WMRMServer",
                },
-               CipherData: CipherData{
+               CipherData: xml.CipherData{
                   CipherValue: cipherValue,
                },
             },
          },
-         CipherData: CipherData{
+         CipherData: xml.CipherData{
             CipherValue: cipherData,
          },
       },

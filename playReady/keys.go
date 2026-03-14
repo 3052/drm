@@ -1,3 +1,4 @@
+// keys.go
 package playReady
 
 import (
@@ -22,8 +23,9 @@ type ContentKey struct {
    Key        [16]byte
 }
 
-// decode decodes a byte slice into a ContentKey structure.
-func (c *ContentKey) decode(data []byte) {
+// decodeContentKey decodes a byte slice into a new ContentKey structure.
+func decodeContentKey(data []byte) *ContentKey {
+   c := &ContentKey{}
    copied := copy(c.KeyID[:], data)
    data = data[copied:]
    c.KeyType = binary.BigEndian.Uint16(data)
@@ -33,6 +35,7 @@ func (c *ContentKey) decode(data []byte) {
    c.Length = binary.BigEndian.Uint16(data)
    data = data[2:]
    c.Value = data
+   return c
 }
 
 func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) error {
@@ -137,13 +140,15 @@ type eccKey struct {
    Value  []byte
 }
 
-// decode decodes a byte slice into an ECCKey structure.
-func (e *eccKey) decode(data []byte) {
+// decodeEccKey decodes a byte slice into an ECCKey structure.
+func decodeEccKey(data []byte) *eccKey {
+   e := &eccKey{}
    e.Curve = binary.BigEndian.Uint16(data)
    data = data[2:]
    e.Length = binary.BigEndian.Uint16(data)
    data = data[2:]
    e.Value = data
+   return e
 }
 
 type keyData struct {
@@ -173,8 +178,9 @@ func (k *keyData) encode() []byte {
    return append(data, k.usage.encode()...)
 }
 
-// decode decodes a byte slice into the key structure.
-func (k *keyData) decode(data []byte) int {
+// decodeKeyData decodes a byte slice into a keyData structure.
+func decodeKeyData(data []byte) (keyData, int) {
+   k := keyData{}
    k.keyType = binary.BigEndian.Uint16(data)
    n := 2 // single letter 'n' allowed because it is the return variable
    k.length = binary.BigEndian.Uint16(data[n:])
@@ -182,8 +188,10 @@ func (k *keyData) decode(data []byte) int {
    k.flags = binary.BigEndian.Uint32(data[n:])
    n += 4
    n += copy(k.publicKey[:], data[n:])
-   n += k.usage.decode(data[n:])
-   return n
+   feat, featN := decodeFeatures(data[n:])
+   k.usage = *feat
+   n += featN
+   return k, n
 }
 
 type keyInfo struct {
@@ -208,17 +216,18 @@ func (k *keyInfo) encode() []byte {
    return data
 }
 
-// decode decodes a byte slice into the keyInfo structure.
-func (k *keyInfo) decode(data []byte) {
+// decodeKeyInfo decodes a byte slice into a new keyInfo structure.
+func decodeKeyInfo(data []byte) *keyInfo {
+   k := &keyInfo{}
    k.entries = binary.BigEndian.Uint32(data)
    data = data[4:]
    k.keys = make([]keyData, k.entries)
    for index := range k.entries {
-      var key keyData
-      offset := key.decode(data)
+      key, offset := decodeKeyData(data)
       k.keys[index] = key
       data = data[offset:]
    }
+   return k
 }
 
 type xmlKey struct {
