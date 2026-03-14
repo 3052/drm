@@ -5,55 +5,55 @@ import (
    "flag"
    "fmt"
    "log"
-   "math/big"
    "os"
 )
 
-func (c *client) do_g1() error {
-   data, err := os.ReadFile(c.g1)
+func (c *client) do_certificate_key() error {
+   data, err := os.ReadFile(c.certificate)
    if err != nil {
       return err
    }
-   var chain playReady.Chain
-   err = chain.Decode(data)
+   certificate, err := playReady.ParseChain(data)
    if err != nil {
       return err
    }
-   for _, certificate := range chain.Certificates {
-      if certificate.Manufacturer != nil {
-         fmt.Printf("%q\n", certificate.Manufacturer.Value)
-      }
-   }
-   return nil
-}
-
-func (c *client) do_g1_z1() error {
-   // z1
-   data, err := os.ReadFile(c.z1)
+   data, err = os.ReadFile(c.key)
    if err != nil {
       return err
    }
-   z1 := new(big.Int).SetBytes(data)
-   encrypt_sign_key := big.NewInt(c.set_encrypt_sign)
-   err = write_file("zPrivEncrSig.dat", encrypt_sign_key.Bytes())
+   modelKey, err := playReady.ParseRawPrivateKey(data)
    if err != nil {
       return err
    }
-   // g1
-   data, err = os.ReadFile(c.g1)
+   signingKey, err := playReady.GenerateKey()
    if err != nil {
       return err
    }
-   var chain playReady.Chain
-   err = chain.Decode(data)
+   encryptKey, err := playReady.GenerateKey()
    if err != nil {
       return err
    }
-   err = chain.Leaf(z1, encrypt_sign_key)
+   err = certificate.GenerateLeaf(modelKey, signingKey, encryptKey)
    if err != nil {
       return err
    }
-   return write_file("bDevCert.dat", chain.Encode())
+   err = write_file("bdevcert.dat", certificate.Bytes())
+   if err != nil {
+      return err
+   }
+   data, err = playReady.PrivateKeyBytes(encryptKey)
+   if err != nil {
+      return err
+   }
+   err = write_file("zprivencr.dat", data)
+   if err != nil {
+      return err
+   }
+   data, err = playReady.PrivateKeyBytes(signingKey)
+   if err != nil {
+      return err
+   }
+   return write_file("zprivsig.dat", data)
 }
 
 func write_file(name string, data []byte) error {
@@ -71,47 +71,40 @@ func main() {
 
 func (c *client) do() error {
    // 1
-   flag.StringVar(&c.g1, "g", "", "g1")
+   flag.StringVar(&c.certificate, "c", "", "certificate")
    // 2
-   flag.StringVar(&c.z1, "z", "", "z1")
-   flag.Int64Var(&c.set_encrypt_sign, "e", 1, "set encrypt/sign")
-   // 3
-   flag.StringVar(&c.get_encrypt_sign, "k", "", "get encrypt/sign")
+   flag.StringVar(&c.key, "k", "", "key")
    flag.Parse()
-   if c.g1 != "" {
+   if c.certificate != "" {
       // 2
-      if c.z1 != "" {
-         return c.do_g1_z1()
+      if c.key != "" {
+         return c.do_certificate_key()
       }
       // 1
-      return c.do_g1()
-   }
-   // 3
-   if c.get_encrypt_sign != "" {
-      return c.do_get_encrypt_sign()
+      return c.do_certificate()
    }
    flag.Usage()
    return nil
 }
 
-type client struct {
-   // 1
-   g1 string
-   // 2
-   z1               string
-   set_encrypt_sign int64
-   // 3
-   get_encrypt_sign string
-}
-
-func (c *client) do_get_encrypt_sign() error {
-   data, err := os.ReadFile(c.get_encrypt_sign)
+func (c *client) do_certificate() error {
+   data, err := os.ReadFile(c.certificate)
    if err != nil {
       return err
    }
-   // Convert bytes back to Big Int
-   encrypt_sign := new(big.Int).SetBytes(data)
-   // Print the integer value (Decimal)
-   fmt.Println(encrypt_sign)
+   chain, err := playReady.ParseChain(data)
+   if err != nil {
+      return err
+   }
+   for _, certificate := range chain.Certs {
+      fmt.Printf("%+v\n", certificate.ManufacturerInfo)
+   }
    return nil
+}
+
+type client struct {
+   // 1
+   certificate string
+   // 2
+   key               string
 }

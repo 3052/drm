@@ -10,50 +10,6 @@ import (
    "testing"
 )
 
-func write_file(name string, data []byte) error {
-   log.Println("WriteFile", name)
-   return os.WriteFile(name, data, os.ModePerm)
-}
-
-var key_tests = []struct {
-   key    string
-   kid_wv string
-   url    string
-}{
-   {
-      key:    "00000000000000000000000000000000",
-      kid_wv: "10000000000000000000000000000000",
-      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==",
-   },
-   {
-      key:    "00000000000000000000000000000000",
-      kid_wv: "10000000000000000000000000000000",
-      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
-   },
-   {
-      key:    "ee0d569c019057569eaf28b988c206f6",
-      kid_wv: "01038786b77fb6ca14eb864155de730e", // L1
-      url:    "https://busy.prd.api.discomax.com/drm-proxy/any/drm-proxy/drm/license/play-ready?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmF0aW9uVGltZSI6IjIwMjUtMDYtMThUMDY6NTQ6NTguNzIxMzMzMTc5WiIsImVkaXRJZCI6IjA2YTM4Mzk3LTg2MmQtNDQxOS1iZTg0LTA2NDE5Mzk4MjVlNyIsImFwcEJ1bmRsZSI6IiIsInBsYXRmb3JtIjoiIiwidXNlcklkIjoiVVNFUklEOmJvbHQ6MGQ0NWNjZjgtYjRhMi00MTQ3LWJiZWItYzdiY2IxNDBmMzgyIiwicHJvZmlsZUlkIjoiUFJPRklMRUlENGJlNDY5NDEtMDNhNS00N2U1LWI0MTQtZTlkOTVjMzlkMjE2IiwiZGV2aWNlSWQiOiIhIiwic3NhaSI6dHJ1ZSwic3RyZWFtVHlwZSI6InZvZCIsImhlYXJ0YmVhdEVuYWJsZWQiOmZhbHNlfQ.f2ptnQEXIcW3xNWDdlK1biJEMk5Sb4y-W_t5-UYqyeg",
-   },
-   {
-      key:    "ab82952e8b567a2359393201e4dde4b4",
-      kid_wv: "318f7ece69afcfe3e96de31be6b77272",
-      url:    "https://prod-playready.rakuten.tv/v1/licensing/pr?uuid=bd497069-8a8f-40a8-b898-b5edf1327761",
-   },
-}[:2]
-
-const baseDir = "ignore/SL2000"
-
-var paths = struct {
-   groupCert, zPriv, devCert, zPrivEncr, zPrivSig string
-}{
-   groupCert: baseDir + "/bgroupcert.dat",
-   zPriv:     baseDir + "/zgpriv.dat",
-   devCert:   baseDir + "/bdevcert.dat",
-   zPrivEncr: baseDir + "/zprivencr.dat",
-   zPrivSig:  baseDir + "/zprivsig.dat",
-}
-
 func TestChain(t *testing.T) {
    data, err := os.ReadFile(paths.groupCert)
    if err != nil {
@@ -67,7 +23,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   z1, err := ParseRawPrivateKey(data)
+   modelKey, err := ParseRawPrivateKey(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -79,7 +35,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   err = certificate.GenerateLeaf(z1, signingKey, encryptKey)
+   err = certificate.GenerateLeaf(modelKey, signingKey, encryptKey)
    if err != nil {
       t.Fatal(err)
    }
@@ -168,4 +124,47 @@ func TestKey(t *testing.T) {
          t.Fatal(".Key")
       }
    }
+}
+func write_file(name string, data []byte) error {
+   log.Println("WriteFile", name)
+   return os.WriteFile(name, data, os.ModePerm)
+}
+
+var key_tests = []struct {
+   key    string
+   kid_wv string
+   url    string
+}{
+   {
+      key:    "00000000000000000000000000000000",
+      kid_wv: "10000000000000000000000000000000",
+      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==",
+   },
+   {
+      key:    "00000000000000000000000000000000",
+      kid_wv: "10000000000000000000000000000000",
+      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
+   },
+   {
+      key:    "ee0d569c019057569eaf28b988c206f6",
+      kid_wv: "01038786b77fb6ca14eb864155de730e", // L1
+      url:    "https://busy.prd.api.discomax.com/drm-proxy/any/drm-proxy/drm/license/play-ready?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHBpcmF0aW9uVGltZSI6IjIwMjUtMDYtMThUMDY6NTQ6NTguNzIxMzMzMTc5WiIsImVkaXRJZCI6IjA2YTM4Mzk3LTg2MmQtNDQxOS1iZTg0LTA2NDE5Mzk4MjVlNyIsImFwcEJ1bmRsZSI6IiIsInBsYXRmb3JtIjoiIiwidXNlcklkIjoiVVNFUklEOmJvbHQ6MGQ0NWNjZjgtYjRhMi00MTQ3LWJiZWItYzdiY2IxNDBmMzgyIiwicHJvZmlsZUlkIjoiUFJPRklMRUlENGJlNDY5NDEtMDNhNS00N2U1LWI0MTQtZTlkOTVjMzlkMjE2IiwiZGV2aWNlSWQiOiIhIiwic3NhaSI6dHJ1ZSwic3RyZWFtVHlwZSI6InZvZCIsImhlYXJ0YmVhdEVuYWJsZWQiOmZhbHNlfQ.f2ptnQEXIcW3xNWDdlK1biJEMk5Sb4y-W_t5-UYqyeg",
+   },
+   {
+      key:    "ab82952e8b567a2359393201e4dde4b4",
+      kid_wv: "318f7ece69afcfe3e96de31be6b77272",
+      url:    "https://prod-playready.rakuten.tv/v1/licensing/pr?uuid=bd497069-8a8f-40a8-b898-b5edf1327761",
+   },
+}[:2]
+
+const baseDir = "ignore/SL2000"
+
+var paths = struct {
+   groupCert, zPriv, devCert, zPrivEncr, zPrivSig string
+}{
+   groupCert: baseDir + "/bgroupcert.dat",
+   zPriv:     baseDir + "/zgpriv.dat",
+   devCert:   baseDir + "/bdevcert.dat",
+   zPrivEncr: baseDir + "/zprivencr.dat",
+   zPrivSig:  baseDir + "/zprivsig.dat",
 }

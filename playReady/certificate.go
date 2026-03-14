@@ -32,6 +32,25 @@ const (
    objTypeSecurityVersion2 = 0x0011
 )
 
+// decodePaddedString decodes a 4-byte length-prefixed string padded to a multiple of 4 bytes.
+func decodePaddedString(data []byte) (string, int) {
+   length := binary.BigEndian.Uint32(data)
+   paddedLength := (length + 3) &^ 3
+   val := string(data[4 : 4+length])
+   return val, int(4 + paddedLength)
+}
+
+// encodePaddedString encodes a string into a 4-byte length-prefixed slice, padded to a multiple of 4 bytes.
+func encodePaddedString(val string) []byte {
+   length := uint32(len(val))
+   paddedLength := (length + 3) &^ 3
+   // make auto zero-initializes, giving us our \x00 padding for free
+   data := make([]byte, int(4+paddedLength))
+   binary.BigEndian.PutUint32(data, length)
+   copy(data[4:], val)
+   return data
+}
+
 type Certificate struct {
    Magic            [4]byte
    Version          uint32
@@ -261,23 +280,4 @@ func decodeManufacturer(data []byte) *Manufacturer {
    data = data[n:]
    m.ModelNumber, _ = decodePaddedString(data)
    return m
-}
-
-// decodePaddedString decodes a 4-byte length-prefixed string padded to a multiple of 4 bytes.
-func decodePaddedString(data []byte) (string, int) {
-   length := binary.BigEndian.Uint32(data)
-   paddedLength := (length + 3) &^ 3
-   val := string(data[4 : 4+length])
-   return val, int(4 + paddedLength)
-}
-
-// encodePaddedString encodes a string into a 4-byte length-prefixed slice, padded to a multiple of 4 bytes.
-func encodePaddedString(val string) []byte {
-   length := uint32(len(val))
-   paddedLength := (length + 3) &^ 3
-   // make auto zero-initializes, giving us our \x00 padding for free
-   data := make([]byte, int(4+paddedLength))
-   binary.BigEndian.PutUint32(data, length)
-   copy(data[4:], val)
-   return data
 }
