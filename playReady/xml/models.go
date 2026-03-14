@@ -1,6 +1,15 @@
-package playReady
+// xml/models.go
+package xml
 
-import "encoding/xml"
+import (
+   "encoding/base64"
+   "encoding/xml"
+)
+
+var (
+   Marshal   = xml.Marshal
+   Unmarshal = xml.Unmarshal
+)
 
 type WrmHeaderData struct {
    ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
@@ -8,6 +17,19 @@ type WrmHeaderData struct {
 }
 
 type Bytes []byte
+
+func (b Bytes) MarshalText() ([]byte, error) {
+   return base64.StdEncoding.AppendEncode(nil, b), nil
+}
+
+func (b *Bytes) UnmarshalText(data []byte) error {
+   var err error
+   *b, err = base64.StdEncoding.AppendDecode(nil, data)
+   if err != nil {
+      return err
+   }
+   return nil
+}
 
 type Envelope struct {
    XMLName xml.Name `xml:"soap:Envelope"`
@@ -107,7 +129,7 @@ type Features struct {
 
 type InnerChallenge struct {
    XmlNs     string `xml:"xmlns,attr"`
-   La        La
+   La        *La
    Signature Signature
 }
 

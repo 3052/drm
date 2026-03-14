@@ -1,3 +1,4 @@
+// common.go
 package playReady
 
 import "encoding/binary"
@@ -63,11 +64,12 @@ type auxKey struct {
    Key      [16]byte
 }
 
-func (a *auxKey) decode(data []byte) int {
+func decodeAuxKey(data []byte) (auxKey, int) {
+   a := auxKey{}
    a.Location = binary.BigEndian.Uint32(data)
    n := 4
    n += copy(a.Key[:], data[n:])
-   return n
+   return a, n
 }
 
 type auxKeys struct {
@@ -75,16 +77,17 @@ type auxKeys struct {
    Keys  []auxKey
 }
 
-func (a *auxKeys) decode(data []byte) {
+func decodeAuxKeys(data []byte) *auxKeys {
+   a := &auxKeys{}
    a.Count = binary.BigEndian.Uint16(data)
    data = data[2:]
    a.Keys = make([]auxKey, a.Count)
    for i := range a.Count {
-      var key auxKey
-      n := key.decode(data)
+      key, n := decodeAuxKey(data)
       a.Keys[i] = key
       data = data[n:]
    }
+   return a
 }
 
 type device struct {
@@ -105,10 +108,12 @@ func (d *device) encode() []byte {
    return binary.BigEndian.AppendUint32(data, d.maxLicenseChainDepth)
 }
 
-func (d *device) decode(data []byte) {
+func decodeDevice(data []byte) *device {
+   d := &device{}
    d.maxLicenseSize = binary.BigEndian.Uint32(data)
    d.maxHeaderSize = binary.BigEndian.Uint32(data[4:])
    d.maxLicenseChainDepth = binary.BigEndian.Uint32(data[8:])
+   return d
 }
 
 type features struct {
@@ -129,14 +134,15 @@ func (f *features) encode() []byte {
    return data
 }
 
-func (f *features) decode(data []byte) int {
+func decodeFeatures(data []byte) (*features, int) {
+   f := &features{}
    f.entries = binary.BigEndian.Uint32(data)
    n := 4
    for range f.entries {
       f.features = append(f.features, binary.BigEndian.Uint32(data[n:]))
       n += 4
    }
-   return n
+   return f, n
 }
 
 type ftlv struct {
@@ -160,7 +166,8 @@ func (f *ftlv) New(flags, Type int, value []byte) {
    f.Value = value
 }
 
-func (f *ftlv) decode(data []byte) int {
+func decodeFtlv(data []byte) (ftlv, int) {
+   f := ftlv{}
    f.Flags = binary.BigEndian.Uint16(data)
    n := 2
    f.Type = binary.BigEndian.Uint16(data[n:])
@@ -169,7 +176,7 @@ func (f *ftlv) decode(data []byte) int {
    n += 4
    f.Value = data[n:][:f.Length-8]
    n += len(f.Value)
-   return n
+   return f, n
 }
 
 type signature struct {
@@ -178,10 +185,12 @@ type signature struct {
    Data   []byte
 }
 
-func (s *signature) decode(data []byte) {
+func decodeSignature(data []byte) *signature {
+   s := &signature{}
    s.Type = binary.BigEndian.Uint16(data)
    data = data[2:]
    s.Length = binary.BigEndian.Uint16(data)
    data = data[2:]
    s.Data = data
+   return s
 }
