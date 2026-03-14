@@ -14,38 +14,30 @@ import (
    "slices"
 )
 
-// Chain represents a chain of certificates.
-type Chain struct {
-   magic   [4]byte
-   version uint32
-   flags   uint32
-   certs   []certificate
-}
-
 func ParseChain(data []byte) (*Chain, error) {
    c := &Chain{}
-   copied := copy(c.magic[:], data)
-   if string(c.magic[:]) != "CHAI" {
+   copied := copy(c.Magic[:], data)
+   if string(c.Magic[:]) != "CHAI" {
       return nil, errors.New("failed to find chain magic")
    }
    data = data[copied:]
-   c.version = binary.BigEndian.Uint32(data)
+   c.Version = binary.BigEndian.Uint32(data)
    data = data[4:]
    // length (skipping, dynamically evaluated)
    data = data[4:]
-   c.flags = binary.BigEndian.Uint32(data)
+   c.Flags = binary.BigEndian.Uint32(data)
    data = data[4:]
    certCount := binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.certs = make([]certificate, certCount)
+   c.Certs = make([]Certificate, certCount)
 
    for index := range certCount {
-      var cert certificate
+      var cert Certificate
       bytesRead, err := cert.decode(data)
       if err != nil {
          return nil, err
       }
-      c.certs[index] = cert
+      c.Certs[index] = cert
       data = data[bytesRead:]
    }
    return c, nil
@@ -54,21 +46,21 @@ func ParseChain(data []byte) (*Chain, error) {
 // Encode encodes the Chain into a byte slice.
 func (c *Chain) Encode() []byte {
    var certsData []byte
-   for _, cert := range c.certs {
+   for _, cert := range c.Certs {
       certsData = append(certsData, cert.encode()...)
    }
 
    magicBytes := make([]byte, 4)
-   copy(magicBytes, c.magic[:])
-   data := binary.BigEndian.AppendUint32(magicBytes, c.version)
+   copy(magicBytes, c.Magic[:])
+   data := binary.BigEndian.AppendUint32(magicBytes, c.Version)
 
    // Chain header is 20 bytes (magic, version, length, flags, certCount)
    length := uint32(20 + len(certsData))
    data = binary.BigEndian.AppendUint32(data, length)
 
-   data = binary.BigEndian.AppendUint32(data, c.flags)
+   data = binary.BigEndian.AppendUint32(data, c.Flags)
 
-   certCount := uint32(len(c.certs))
+   certCount := uint32(len(c.Certs))
    data = binary.BigEndian.AppendUint32(data, certCount)
 
    data = append(data, certsData...)
@@ -78,16 +70,16 @@ func (c *Chain) Encode() []byte {
 // verify verifies the entire certificate chain.
 func (c *Chain) verify() bool {
    // Start verification with the issuer key of the last certificate in the chain.
-   modelBase := c.certs[len(c.certs)-1].signatureData.IssuerKey
-   for index := len(c.certs) - 1; index >= 0; index-- {
+   modelBase := c.Certs[len(c.Certs)-1].SignatureData.IssuerKey
+   for index := len(c.Certs) - 1; index >= 0; index-- {
       // Verify each certificate using the public key of its issuer.
-      valid := c.certs[index].verify(modelBase[:])
+      valid := c.Certs[index].verify(modelBase[:])
       if !valid {
          return false
       }
       // The public key of the current certificate becomes the issuer key for
       // the next in the chain.
-      modelBase = c.certs[index].keyInfo.keys[0].publicKey[:]
+      modelBase = c.Certs[index].KeyInfo.Keys[0].PublicKey[:]
    }
    return true
 }
@@ -97,7 +89,7 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    if err != nil {
       return err
    }
-   if !bytes.Equal(c.certs[0].keyInfo.keys[0].publicKey[:], modelPub) {
+   if !bytes.Equal(c.Certs[0].KeyInfo.Keys[0].PublicKey[:], modelPub) {
       return errors.New("zgpriv not for cert")
    }
    if !c.verify() {
@@ -113,42 +105,42 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
       return err
    }
 
-   var unsignedCert certificate
-   copy(unsignedCert.magic[:], "CERT")
-   unsignedCert.version = 1
-   unsignedCert.unknownRecords = make(map[uint16][]byte)
+   var unsignedCert Certificate
+   copy(unsignedCert.Magic[:], "CERT")
+   unsignedCert.Version = 1
+   unsignedCert.UnknownRecords = make(map[uint16][]byte)
 
-   var info certificateInfo
+   var info CertificateInfo
    digest := sha256.Sum256(signPub)
-   info.New(c.certs[0].certificateInfo.securityLevel, digest[:])
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeBasic)
-   unsignedCert.certificateInfo = &info
+   info.New(c.Certs[0].CertificateInfo.SecurityLevel, digest[:])
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeBasic)
+   unsignedCert.CertificateInfo = &info
 
-   var dev device
+   var dev Device
    dev.New()
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeDevice)
-   unsignedCert.deviceInfo = &dev
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeDevice)
+   unsignedCert.DeviceInfo = &dev
 
-   var feat features
+   var feat Features
    feat.New(0xD) // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeFeature)
-   unsignedCert.features = &feat
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeFeature)
+   unsignedCert.Features = &feat
 
-   var key keyInfo
+   var key KeyInfo
    key.New(signPub, encPub)
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeKey)
-   unsignedCert.keyInfo = &key
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeKey)
+   unsignedCert.KeyInfo = &key
 
    // Reusing model Manufacturer info
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeManufacturer)
-   unsignedCert.manufacturerInfo = c.certs[0].manufacturerInfo
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeManufacturer)
+   unsignedCert.ManufacturerInfo = c.Certs[0].ManufacturerInfo
 
    // To compute dynamic lengths properly in encode(), we append a dummy signature
    // structure so the exact header bytes can be fully calculated for digest signing.
-   var dummySig ecdsaSignature
+   var dummySig EcdsaSignature
    dummySig.New(make([]byte, 64), modelPub)
-   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeSignature)
-   unsignedCert.signatureData = &dummySig
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeSignature)
+   unsignedCert.SignatureData = &dummySig
 
    certData := unsignedCert.encode()
    lengthToSig := binary.BigEndian.Uint32(certData[12:16])
@@ -164,13 +156,13 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    sigR.FillBytes(sign[:32])
    sigS.FillBytes(sign[32:])
 
-   var signatureData ecdsaSignature
+   var signatureData EcdsaSignature
    signatureData.New(sign[:], modelPub)
 
    // Replace the dummy signature with the authentic one
-   unsignedCert.signatureData = &signatureData
+   unsignedCert.SignatureData = &signatureData
 
-   c.certs = slices.Insert(c.certs, 0, unsignedCert)
+   c.Certs = slices.Insert(c.Certs, 0, unsignedCert)
 
    return nil
 }
@@ -257,4 +249,12 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
    cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
    return append(key.aesIv(), data...), nil
+}
+
+// Chain represents a chain of certificates.
+type Chain struct {
+   Magic   [4]byte
+   Version uint32
+   Flags   uint32
+   Certs   []Certificate
 }

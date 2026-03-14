@@ -118,41 +118,41 @@ func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error
    return mPoint.Bytes()[1:], nil
 }
 
-type ecdsaSignature struct {
-   signatureType   uint16
-   signatureLength uint16
+type EcdsaSignature struct {
+   SignatureType   uint16
+   SignatureLength uint16
    SignatureData   []byte // The actual signature bytes
-   issuerLength    uint32 // Bit length representation
+   IssuerLength    uint32 // Bit length representation
    IssuerKey       []byte // The public key of the issuer that signed this
 }
 
-func (s *ecdsaSignature) New(signatureData, signingKey []byte) {
-   s.signatureType = 1
-   s.signatureLength = uint16(len(signatureData))
+func (s *EcdsaSignature) New(signatureData, signingKey []byte) {
+   s.SignatureType = 1
+   s.SignatureLength = uint16(len(signatureData))
    s.SignatureData = signatureData
-   s.issuerLength = uint32(len(signingKey)) * 8 // Store as raw bit size, not bytes!
+   s.IssuerLength = uint32(len(signingKey)) * 8 // Store as raw bit size, not bytes!
    s.IssuerKey = signingKey
 }
 
-func (s *ecdsaSignature) encode() []byte {
-   encBuf := binary.BigEndian.AppendUint16(nil, s.signatureType)
-   encBuf = binary.BigEndian.AppendUint16(encBuf, s.signatureLength)
+func (s *EcdsaSignature) encode() []byte {
+   encBuf := binary.BigEndian.AppendUint16(nil, s.SignatureType)
+   encBuf = binary.BigEndian.AppendUint16(encBuf, s.SignatureLength)
    encBuf = append(encBuf, s.SignatureData...)
    // No longer multiplying by 8, preventing catastrophic size multiplication
-   encBuf = binary.BigEndian.AppendUint32(encBuf, s.issuerLength)
+   encBuf = binary.BigEndian.AppendUint32(encBuf, s.IssuerLength)
    return append(encBuf, s.IssuerKey...)
 }
 
-func decodeEcdsaSignature(data []byte) *ecdsaSignature {
-   s := &ecdsaSignature{}
-   s.signatureType = binary.BigEndian.Uint16(data)
+func decodeEcdsaSignature(data []byte) *EcdsaSignature {
+   s := &EcdsaSignature{}
+   s.SignatureType = binary.BigEndian.Uint16(data)
    data = data[2:]
-   s.signatureLength = binary.BigEndian.Uint16(data)
+   s.SignatureLength = binary.BigEndian.Uint16(data)
    data = data[2:]
-   s.SignatureData = data[:s.signatureLength]
-   data = data[s.signatureLength:]
+   s.SignatureData = data[:s.SignatureLength]
+   data = data[s.SignatureLength:]
    // Keep reading as direct bit scale without manipulating
-   s.issuerLength = binary.BigEndian.Uint32(data)
+   s.IssuerLength = binary.BigEndian.Uint32(data)
    data = data[4:]
    s.IssuerKey = data
    return s

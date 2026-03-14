@@ -32,27 +32,27 @@ const (
    objTypeSecurityVersion2 = 0x0011
 )
 
-type certificate struct {
-   magic            [4]byte
-   version          uint32
-   certificateInfo  *certificateInfo
-   deviceInfo       *device
-   features         *features
-   keyInfo          *keyInfo
-   manufacturerInfo *manufacturer
-   signatureData    *ecdsaSignature
+type Certificate struct {
+   Magic            [4]byte
+   Version          uint32
+   CertificateInfo  *CertificateInfo
+   DeviceInfo       *Device
+   Features         *Features
+   KeyInfo          *KeyInfo
+   ManufacturerInfo *Manufacturer
+   SignatureData    *EcdsaSignature
 
-   recordOrder    []uint16
-   unknownRecords map[uint16][]byte
+   RecordOrder    []uint16
+   UnknownRecords map[uint16][]byte
 }
 
-// decode decodes a byte slice into the Cert structure.
-func (c *certificate) decode(data []byte) (int, error) {
-   n := copy(c.magic[:], data)
-   if string(c.magic[:]) != "CERT" {
+// decode decodes a byte slice into the Certificate structure.
+func (c *Certificate) decode(data []byte) (int, error) {
+   n := copy(c.Magic[:], data)
+   if string(c.Magic[:]) != "CERT" {
       return 0, errors.New("failed to find cert magic")
    }
-   c.version = binary.BigEndian.Uint32(data[n:])
+   c.Version = binary.BigEndian.Uint32(data[n:])
    n += 4
    length := binary.BigEndian.Uint32(data[n:])
    n += 4
@@ -63,7 +63,7 @@ func (c *certificate) decode(data []byte) (int, error) {
    certData := data[n : n+certDataLen]
    n += certDataLen
 
-   c.unknownRecords = make(map[uint16][]byte)
+   c.UnknownRecords = make(map[uint16][]byte)
 
    var n1 int
    for n1 < len(certData) {
@@ -83,32 +83,32 @@ func (c *certificate) decode(data []byte) (int, error) {
       valBytes := certData[n1+8 : n1+int(recLen)]
       n1 += int(recLen)
 
-      c.recordOrder = append(c.recordOrder, recType)
+      c.RecordOrder = append(c.RecordOrder, recType)
 
       switch recType {
       case objTypeBasic:
-         c.certificateInfo = decodeCertificateInfo(valBytes)
+         c.CertificateInfo = decodeCertificateInfo(valBytes)
       case objTypeDevice:
-         c.deviceInfo = decodeDevice(valBytes)
+         c.DeviceInfo = decodeDevice(valBytes)
       case objTypeFeature:
          feat, _ := decodeFeatures(valBytes)
-         c.features = feat
+         c.Features = feat
       case objTypeKey:
-         c.keyInfo = decodeKeyInfo(valBytes)
+         c.KeyInfo = decodeKeyInfo(valBytes)
       case objTypeManufacturer:
-         c.manufacturerInfo = decodeManufacturer(valBytes)
+         c.ManufacturerInfo = decodeManufacturer(valBytes)
       case objTypeSignature:
-         c.signatureData = decodeEcdsaSignature(valBytes)
+         c.SignatureData = decodeEcdsaSignature(valBytes)
       default:
-         c.unknownRecords[recType] = valBytes
+         c.UnknownRecords[recType] = valBytes
       }
    }
    return n, nil
 }
 
 // verify verifies the signature of the certificate using the provided public key.
-func (c *certificate) verify(pubKey []byte) bool {
-   if c.signatureData == nil || !bytes.Equal(c.signatureData.IssuerKey, pubKey) {
+func (c *Certificate) verify(pubKey []byte) bool {
+   if c.SignatureData == nil || !bytes.Equal(c.SignatureData.IssuerKey, pubKey) {
       return false
    }
 
@@ -125,19 +125,19 @@ func (c *certificate) verify(pubKey []byte) bool {
    lengthToSig := binary.BigEndian.Uint32(data[12:16])
    signatureDigest := sha256.Sum256(data[:lengthToSig])
 
-   sign := c.signatureData.SignatureData
+   sign := c.SignatureData.SignatureData
    r := new(big.Int).SetBytes(sign[:32])
    s := new(big.Int).SetBytes(sign[32:])
 
    return ecdsa.Verify(publicKey, signatureDigest[:], r, s)
 }
 
-// encode encodes the Cert structure into a byte slice.
-func (c *certificate) encode() []byte {
+// encode encodes the Certificate structure into a byte slice.
+func (c *Certificate) encode() []byte {
    var raw []byte
    var lengthToSignature uint32
 
-   for _, recType := range c.recordOrder {
+   for _, recType := range c.RecordOrder {
       if recType == objTypeSignature {
          lengthToSignature = uint32(16 + len(raw))
       }
@@ -145,19 +145,19 @@ func (c *certificate) encode() []byte {
       var valBytes []byte
       switch recType {
       case objTypeBasic:
-         valBytes = c.certificateInfo.encode()
+         valBytes = c.CertificateInfo.encode()
       case objTypeDevice:
-         valBytes = c.deviceInfo.encode()
+         valBytes = c.DeviceInfo.encode()
       case objTypeFeature:
-         valBytes = c.features.encode()
+         valBytes = c.Features.encode()
       case objTypeKey:
-         valBytes = c.keyInfo.encode()
+         valBytes = c.KeyInfo.encode()
       case objTypeManufacturer:
-         valBytes = c.manufacturerInfo.encode()
+         valBytes = c.ManufacturerInfo.encode()
       case objTypeSignature:
-         valBytes = c.signatureData.encode()
+         valBytes = c.SignatureData.encode()
       default:
-         valBytes = c.unknownRecords[recType]
+         valBytes = c.UnknownRecords[recType]
       }
 
       flags := uint16(1)
@@ -178,111 +178,111 @@ func (c *certificate) encode() []byte {
    length := uint32(16 + len(raw))
 
    magicBytes := make([]byte, 4)
-   copy(magicBytes, c.magic[:])
-   data := binary.BigEndian.AppendUint32(magicBytes, c.version)
+   copy(magicBytes, c.Magic[:])
+   data := binary.BigEndian.AppendUint32(magicBytes, c.Version)
    data = binary.BigEndian.AppendUint32(data, length)
    data = binary.BigEndian.AppendUint32(data, lengthToSignature)
    data = append(data, raw...)
    return data
 }
 
-type certificateInfo struct {
-   certificateId [16]byte
-   securityLevel uint32
-   flags         uint32
-   infoType      uint32
-   digest        [32]byte
-   expiry        uint32
-   clientId      [16]byte
+type CertificateInfo struct {
+   CertificateId [16]byte
+   SecurityLevel uint32
+   Flags         uint32
+   InfoType      uint32
+   Digest        [32]byte
+   Expiry        uint32
+   ClientId      [16]byte
 }
 
-func (c *certificateInfo) encode() []byte {
+func (c *CertificateInfo) encode() []byte {
    data := make([]byte, 0, 80)
-   data = append(data, c.certificateId[:]...)
-   data = binary.BigEndian.AppendUint32(data, c.securityLevel)
-   data = binary.BigEndian.AppendUint32(data, c.flags)
-   data = binary.BigEndian.AppendUint32(data, c.infoType)
-   data = append(data, c.digest[:]...)
-   data = binary.BigEndian.AppendUint32(data, c.expiry)
-   return append(data, c.clientId[:]...)
+   data = append(data, c.CertificateId[:]...)
+   data = binary.BigEndian.AppendUint32(data, c.SecurityLevel)
+   data = binary.BigEndian.AppendUint32(data, c.Flags)
+   data = binary.BigEndian.AppendUint32(data, c.InfoType)
+   data = append(data, c.Digest[:]...)
+   data = binary.BigEndian.AppendUint32(data, c.Expiry)
+   return append(data, c.ClientId[:]...)
 }
 
-func (c *certificateInfo) New(securityLevel uint32, digest []byte) {
-   c.securityLevel = securityLevel
-   c.infoType = 2
-   copy(c.digest[:], digest)
-   c.expiry = 4294967295
+func (c *CertificateInfo) New(securityLevel uint32, digest []byte) {
+   c.SecurityLevel = securityLevel
+   c.InfoType = 2
+   copy(c.Digest[:], digest)
+   c.Expiry = 4294967295
 }
 
-// decodeCertificateInfo decodes a byte slice into a new certificateInfo structure.
-func decodeCertificateInfo(data []byte) *certificateInfo {
-   c := &certificateInfo{}
-   n := copy(c.certificateId[:], data)
+// decodeCertificateInfo decodes a byte slice into a new CertificateInfo structure.
+func decodeCertificateInfo(data []byte) *CertificateInfo {
+   c := &CertificateInfo{}
+   n := copy(c.CertificateId[:], data)
    data = data[n:]
-   c.securityLevel = binary.BigEndian.Uint32(data)
+   c.SecurityLevel = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.flags = binary.BigEndian.Uint32(data)
+   c.Flags = binary.BigEndian.Uint32(data)
    data = data[4:]
-   c.infoType = binary.BigEndian.Uint32(data)
+   c.InfoType = binary.BigEndian.Uint32(data)
    data = data[4:]
-   n = copy(c.digest[:], data)
+   n = copy(c.Digest[:], data)
    data = data[n:]
-   c.expiry = binary.BigEndian.Uint32(data)
+   c.Expiry = binary.BigEndian.Uint32(data)
    data = data[4:]
-   copy(c.clientId[:], data)
+   copy(c.ClientId[:], data)
    return c
 }
 
-// manufacturer represents manufacturer details.
-type manufacturer struct {
-   flags            uint32
-   manufacturerName manufacturerInfo
-   modelName        manufacturerInfo
-   modelNumber      manufacturerInfo
+// Manufacturer represents manufacturer details.
+type Manufacturer struct {
+   Flags            uint32
+   ManufacturerName ManufacturerInfo
+   ModelName        ManufacturerInfo
+   ModelNumber      ManufacturerInfo
 }
 
 // encode encodes the manufacturer structure into a byte slice.
-func (m *manufacturer) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, m.flags)
-   data = append(data, m.manufacturerName.encode()...)
-   data = append(data, m.modelName.encode()...)
-   return append(data, m.modelNumber.encode()...)
+func (m *Manufacturer) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, m.Flags)
+   data = append(data, m.ManufacturerName.encode()...)
+   data = append(data, m.ModelName.encode()...)
+   return append(data, m.ModelNumber.encode()...)
 }
 
-// decodeManufacturer decodes a byte slice into a new manufacturer structure.
-func decodeManufacturer(data []byte) *manufacturer {
-   m := &manufacturer{}
-   m.flags = binary.BigEndian.Uint32(data)
+// decodeManufacturer decodes a byte slice into a new Manufacturer structure.
+func decodeManufacturer(data []byte) *Manufacturer {
+   m := &Manufacturer{}
+   m.Flags = binary.BigEndian.Uint32(data)
    data = data[4:]
    var n int
-   m.manufacturerName, n = decodeManufacturerInfo(data)
+   m.ManufacturerName, n = decodeManufacturerInfo(data)
    data = data[n:]
-   m.modelName, n = decodeManufacturerInfo(data)
+   m.ModelName, n = decodeManufacturerInfo(data)
    data = data[n:]
-   m.modelNumber, _ = decodeManufacturerInfo(data)
+   m.ModelNumber, _ = decodeManufacturerInfo(data)
    return m
 }
 
-// manufacturerInfo contains a length-prefixed string.
-type manufacturerInfo struct {
-   length uint32
-   value  string
+// ManufacturerInfo contains a length-prefixed string.
+type ManufacturerInfo struct {
+   Length uint32
+   Value  string
 }
 
-// decodeManufacturerInfo decodes a byte slice into a manufacturerInfo structure.
-func decodeManufacturerInfo(data []byte) (manufacturerInfo, int) {
-   m := manufacturerInfo{}
-   m.length = binary.BigEndian.Uint32(data)
+// decodeManufacturerInfo decodes a byte slice into a ManufacturerInfo structure.
+func decodeManufacturerInfo(data []byte) (ManufacturerInfo, int) {
+   m := ManufacturerInfo{}
+   m.Length = binary.BigEndian.Uint32(data)
    n := 4
    // Data is padded to a multiple of 4 bytes.
-   padded_length := (m.length + 3) &^ 3
-   m.value = string(data[n:][:padded_length])
+   padded_length := (m.Length + 3) &^ 3
+   m.Value = string(data[n:][:padded_length])
    n += int(padded_length)
    return m, n
 }
 
-// encode encodes the manufacturerInfo structure into a byte slice.
-func (m *manufacturerInfo) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, m.length)
-   return append(data, m.value...)
+// encode encodes the ManufacturerInfo structure into a byte slice.
+func (m *ManufacturerInfo) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, m.Length)
+   return append(data, m.Value...)
 }

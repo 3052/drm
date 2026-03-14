@@ -34,80 +34,80 @@ func decodeEccKey(data []byte) *eccKey {
    return e
 }
 
-type keyData struct {
-   keyType uint16
-   length  uint16
-   flags   uint32
+type KeyData struct {
+   KeyType uint16
+   Length  uint16
+   Flags   uint32
    // ECDSA P256 public key is 64 bytes (X and Y coordinates, 32 bytes each)
-   publicKey [64]byte
+   PublicKey [64]byte
    // Features indicating key usage
-   usage features
+   Usage Features
 }
 
 // New initializes a new key with provided data and type.
-func (k *keyData) New(data []byte, Type int) {
-   k.keyType = 1  // Assuming type 1 is for ECDSA keys
-   k.length = 512 // Assuming key length in bits
-   copy(k.publicKey[:], data)
-   k.usage.New(Type)
+func (k *KeyData) New(data []byte, Type int) {
+   k.KeyType = 1  // Assuming type 1 is for ECDSA keys
+   k.Length = 512 // Assuming key length in bits
+   copy(k.PublicKey[:], data)
+   k.Usage.New(Type)
 }
 
 // encode encodes the key structure into a byte slice.
-func (k *keyData) encode() []byte {
-   data := binary.BigEndian.AppendUint16(nil, k.keyType)
-   data = binary.BigEndian.AppendUint16(data, k.length)
-   data = binary.BigEndian.AppendUint32(data, k.flags)
-   data = append(data, k.publicKey[:]...)
-   return append(data, k.usage.encode()...)
+func (k *KeyData) encode() []byte {
+   data := binary.BigEndian.AppendUint16(nil, k.KeyType)
+   data = binary.BigEndian.AppendUint16(data, k.Length)
+   data = binary.BigEndian.AppendUint32(data, k.Flags)
+   data = append(data, k.PublicKey[:]...)
+   return append(data, k.Usage.encode()...)
 }
 
-// decodeKeyData decodes a byte slice into a keyData structure.
-func decodeKeyData(data []byte) (keyData, int) {
-   k := keyData{}
-   k.keyType = binary.BigEndian.Uint16(data)
+// decodeKeyData decodes a byte slice into a KeyData structure.
+func decodeKeyData(data []byte) (KeyData, int) {
+   k := KeyData{}
+   k.KeyType = binary.BigEndian.Uint16(data)
    n := 2 // single letter 'n' allowed because it is the return variable
-   k.length = binary.BigEndian.Uint16(data[n:])
+   k.Length = binary.BigEndian.Uint16(data[n:])
    n += 2
-   k.flags = binary.BigEndian.Uint32(data[n:])
+   k.Flags = binary.BigEndian.Uint32(data[n:])
    n += 4
-   n += copy(k.publicKey[:], data[n:])
+   n += copy(k.PublicKey[:], data[n:])
    feat, featN := decodeFeatures(data[n:])
-   k.usage = *feat
+   k.Usage = *feat
    n += featN
    return k, n
 }
 
-type keyInfo struct {
-   entries uint32
-   keys    []keyData
+type KeyInfo struct {
+   Entries uint32
+   Keys    []KeyData
 }
 
-// New initializes a new keyInfo with signing and encryption keys.
-func (k *keyInfo) New(signingKey, encryptKey []byte) {
-   k.entries = 2
-   k.keys = make([]keyData, 2)
-   k.keys[0].New(signingKey, 1) // Type 1 for signing key
-   k.keys[1].New(encryptKey, 2) // Type 2 for encryption key
+// New initializes a new KeyInfo with signing and encryption keys.
+func (k *KeyInfo) New(signingKey, encryptKey []byte) {
+   k.Entries = 2
+   k.Keys = make([]KeyData, 2)
+   k.Keys[0].New(signingKey, 1) // Type 1 for signing key
+   k.Keys[1].New(encryptKey, 2) // Type 2 for encryption key
 }
 
-// encode encodes the keyInfo structure into a byte slice.
-func (k *keyInfo) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, k.entries)
-   for _, key := range k.keys {
+// encode encodes the KeyInfo structure into a byte slice.
+func (k *KeyInfo) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, k.Entries)
+   for _, key := range k.Keys {
       data = append(data, key.encode()...)
    }
    return data
 }
 
-// decodeKeyInfo decodes a byte slice into a new keyInfo structure.
-func decodeKeyInfo(data []byte) *keyInfo {
-   k := &keyInfo{}
-   k.entries = binary.BigEndian.Uint32(data)
+// decodeKeyInfo decodes a byte slice into a new KeyInfo structure.
+func decodeKeyInfo(data []byte) *KeyInfo {
+   k := &KeyInfo{}
+   k.Entries = binary.BigEndian.Uint32(data)
    data = data[4:]
-   k.keys = make([]keyData, k.entries)
-   for index := range k.entries {
+   k.Keys = make([]KeyData, k.Entries)
+   for index := range k.Entries {
       key, offset := decodeKeyData(data)
-      k.keys[index] = key
+      k.Keys[index] = key
       data = data[offset:]
    }
    return k

@@ -99,56 +99,56 @@ func decodeAuxKeys(data []byte) *auxKeys {
    return a
 }
 
-type device struct {
-   maxLicenseSize       uint32
-   maxHeaderSize        uint32
-   maxLicenseChainDepth uint32
+type Device struct {
+   MaxLicenseSize       uint32
+   MaxHeaderSize        uint32
+   MaxLicenseChainDepth uint32
 }
 
-func (d *device) New() {
-   d.maxLicenseSize = 10240
-   d.maxHeaderSize = 15360
-   d.maxLicenseChainDepth = 2
+func (d *Device) New() {
+   d.MaxLicenseSize = 10240
+   d.MaxHeaderSize = 15360
+   d.MaxLicenseChainDepth = 2
 }
 
-func (d *device) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, d.maxLicenseSize)
-   data = binary.BigEndian.AppendUint32(data, d.maxHeaderSize)
-   return binary.BigEndian.AppendUint32(data, d.maxLicenseChainDepth)
+func (d *Device) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, d.MaxLicenseSize)
+   data = binary.BigEndian.AppendUint32(data, d.MaxHeaderSize)
+   return binary.BigEndian.AppendUint32(data, d.MaxLicenseChainDepth)
 }
 
-func decodeDevice(data []byte) *device {
-   d := &device{}
-   d.maxLicenseSize = binary.BigEndian.Uint32(data)
-   d.maxHeaderSize = binary.BigEndian.Uint32(data[4:])
-   d.maxLicenseChainDepth = binary.BigEndian.Uint32(data[8:])
+func decodeDevice(data []byte) *Device {
+   d := &Device{}
+   d.MaxLicenseSize = binary.BigEndian.Uint32(data)
+   d.MaxHeaderSize = binary.BigEndian.Uint32(data[4:])
+   d.MaxLicenseChainDepth = binary.BigEndian.Uint32(data[8:])
    return d
 }
 
-type features struct {
-   entries  uint32
-   features []uint32
+type Features struct {
+   Entries  uint32
+   Features []uint32
 }
 
-func (f *features) New(Type int) {
-   f.entries = 1
-   f.features = []uint32{uint32(Type)}
+func (f *Features) New(Type int) {
+   f.Entries = 1
+   f.Features = []uint32{uint32(Type)}
 }
 
-func (f *features) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, f.entries)
-   for _, feature := range f.features {
+func (f *Features) encode() []byte {
+   data := binary.BigEndian.AppendUint32(nil, f.Entries)
+   for _, feature := range f.Features {
       data = binary.BigEndian.AppendUint32(data, feature)
    }
    return data
 }
 
-func decodeFeatures(data []byte) (*features, int) {
-   f := &features{}
-   f.entries = binary.BigEndian.Uint32(data)
+func decodeFeatures(data []byte) (*Features, int) {
+   f := &Features{}
+   f.Entries = binary.BigEndian.Uint32(data)
    n := 4
-   for range f.entries {
-      f.features = append(f.features, binary.BigEndian.Uint32(data[n:]))
+   for range f.Entries {
+      f.Features = append(f.Features, binary.BigEndian.Uint32(data[n:]))
       n += 4
    }
    return f, n
