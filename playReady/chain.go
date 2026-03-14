@@ -138,37 +138,39 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) e
    var unsignedCert certificate
    copy(unsignedCert.magic[:], "CERT")
    unsignedCert.version = 1
+   unsignedCert.unknownRecords = make(map[uint16][]byte)
 
    var info certificateInfo
    digest := sha256.Sum256(signPub)
    info.New(c.certs[0].certificateInfo.securityLevel, digest[:])
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeBasic, CertificateInfo: &info})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeBasic)
    unsignedCert.certificateInfo = &info
 
    var dev device
    dev.New()
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeDevice, DeviceInfo: &dev})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeDevice)
    unsignedCert.deviceInfo = &dev
 
    var feat features
    feat.New(0xD) // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeFeature, Features: &feat})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeFeature)
    unsignedCert.features = &feat
 
    var key keyInfo
    key.New(signPub, encPub)
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeKey, KeyInfo: &key})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeKey)
    unsignedCert.keyInfo = &key
 
    // Reusing model Manufacturer info
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 0, Type: objTypeManufacturer, ManufacturerInfo: c.certs[0].manufacturerInfo})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeManufacturer)
    unsignedCert.manufacturerInfo = c.certs[0].manufacturerInfo
 
    // To compute dynamic lengths properly in encode(), we append a dummy signature
    // structure so the exact header bytes can be fully calculated for digest signing.
    var dummySig ecdsaSignature
    dummySig.New(make([]byte, 64), modelPub)
-   unsignedCert.records = append(unsignedCert.records, certRecord{Flags: 1, Type: objTypeSignature, SignatureData: &dummySig})
+   unsignedCert.recordOrder = append(unsignedCert.recordOrder, objTypeSignature)
+   unsignedCert.signatureData = &dummySig
 
    certData := unsignedCert.encode()
    lengthToSig := binary.BigEndian.Uint32(certData[12:16])
@@ -188,7 +190,6 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) e
    signatureData.New(sign[:], modelPub)
 
    // Replace the dummy signature with the authentic one
-   unsignedCert.records[len(unsignedCert.records)-1].SignatureData = &signatureData
    unsignedCert.signatureData = &signatureData
 
    c.certs = slices.Insert(c.certs, 0, unsignedCert)

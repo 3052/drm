@@ -31,100 +31,18 @@ const (
    objTypeSecurityVersion2 = 0x0011
 )
 
-type certRecord struct {
-   Flags            uint16
-   Type             uint16
-   UnknownData      []byte
-   CertificateInfo  *certificateInfo
-   DeviceInfo       *device
-   Features         *features
-   KeyInfo          *keyInfo
-   ManufacturerInfo *manufacturer
-   SignatureData    *ecdsaSignature
-}
-
-func (r *certRecord) decode(data []byte) int {
-   r.Flags = binary.BigEndian.Uint16(data)
-   n := 2
-   r.Type = binary.BigEndian.Uint16(data[n:])
-   n += 2
-   length := binary.BigEndian.Uint32(data[n:])
-   n += 4
-   valBytes := data[n:][:length-8]
-   n += len(valBytes)
-
-   switch r.Type {
-   case objTypeBasic:
-      info := &certificateInfo{}
-      info.decode(valBytes)
-      r.CertificateInfo = info
-   case objTypeDevice:
-      dev := &device{}
-      dev.decode(valBytes)
-      r.DeviceInfo = dev
-   case objTypeFeature:
-      feat := &features{}
-      feat.decode(valBytes)
-      r.Features = feat
-   case objTypeKey:
-      key := &keyInfo{}
-      key.decode(valBytes)
-      r.KeyInfo = key
-   case objTypeManufacturer:
-      man := &manufacturer{}
-      man.decode(valBytes)
-      r.ManufacturerInfo = man
-   case objTypeSignature:
-      sig := &ecdsaSignature{}
-      sig.decode(valBytes)
-      r.SignatureData = sig
-   default:
-      r.UnknownData = valBytes
-   }
-   return n
-}
-
-func (r *certRecord) encode() []byte {
-   // Type 0xFFFF is our custom marker for trailing unformatted padding
-   if r.Type == 0xFFFF {
-      return r.UnknownData
-   }
-
-   var valBytes []byte
-   if r.CertificateInfo != nil {
-      valBytes = r.CertificateInfo.encode()
-   } else if r.DeviceInfo != nil {
-      valBytes = r.DeviceInfo.encode()
-   } else if r.Features != nil {
-      valBytes = r.Features.encode()
-   } else if r.KeyInfo != nil {
-      valBytes = r.KeyInfo.encode()
-   } else if r.ManufacturerInfo != nil {
-      valBytes = r.ManufacturerInfo.encode()
-   } else if r.SignatureData != nil {
-      valBytes = r.SignatureData.encode()
-   } else {
-      valBytes = r.UnknownData
-   }
-
-   data := binary.BigEndian.AppendUint16(nil, r.Flags)
-   data = binary.BigEndian.AppendUint16(data, r.Type)
-   data = binary.BigEndian.AppendUint32(data, uint32(len(valBytes)+8))
-   return append(data, valBytes...)
-}
-
 type certificate struct {
-   magic   [4]byte
-   version uint32
-   records []certRecord
-
-   // Helper pointers mapped directly to the structs inside records
+   magic            [4]byte
+   version          uint32
    certificateInfo  *certificateInfo
    deviceInfo       *device
    features         *features
    keyInfo          *keyInfo
    manufacturerInfo *manufacturer
    signatureData    *ecdsaSignature
+
+   recordOrder    []uint16
+   unknownRecords map[uint16][]byte
 }
 
 // decode decodes a byte slice into the Cert structure.
@@ -144,36 +62,55 @@ func (c *certificate) decode(data []byte) (int, error) {
    certData := data[n : n+certDataLen]
    n += certDataLen
 
+   c.unknownRecords = make(map[uint16][]byte)
+
    var n1 int
    for n1 < len(certData) {
       // Safeguard against malformed/unformatted trailing padding zeroes
       if len(certData)-n1 < 8 {
-         c.records = append(c.records, certRecord{Type: 0xFFFF, UnknownData: certData[n1:]})
          break
       }
+
+      _ = binary.BigEndian.Uint16(certData[n1:]) // skip flags, we re-apply them on encode
+      recType := binary.BigEndian.Uint16(certData[n1+2 : n1+4])
       recLen := binary.BigEndian.Uint32(certData[n1+4 : n1+8])
-      if recLen < 8 {
-         c.records = append(c.records, certRecord{Type: 0xFFFF, UnknownData: certData[n1:]})
+
+      if recLen < 8 || n1+int(recLen) > len(certData) {
          break
       }
 
-      var record certRecord
-      n1 += record.decode(certData[n1:])
-      c.records = append(c.records, record)
+      valBytes := certData[n1+8 : n1+int(recLen)]
+      n1 += int(recLen)
 
-      switch record.Type {
+      c.recordOrder = append(c.recordOrder, recType)
+
+      switch recType {
       case objTypeBasic:
-         c.certificateInfo = record.CertificateInfo
+         info := &certificateInfo{}
+         info.decode(valBytes)
+         c.certificateInfo = info
       case objTypeDevice:
-         c.deviceInfo = record.DeviceInfo
+         dev := &device{}
+         dev.decode(valBytes)
+         c.deviceInfo = dev
       case objTypeFeature:
-         c.features = record.Features
+         feat := &features{}
+         feat.decode(valBytes)
+         c.features = feat
       case objTypeKey:
-         c.keyInfo = record.KeyInfo
+         key := &keyInfo{}
+         key.decode(valBytes)
+         c.keyInfo = key
       case objTypeManufacturer:
-         c.manufacturerInfo = record.ManufacturerInfo
+         man := &manufacturer{}
+         man.decode(valBytes)
+         c.manufacturerInfo = man
       case objTypeSignature:
-         c.signatureData = record.SignatureData
+         sig := &ecdsaSignature{}
+         sig.decode(valBytes)
+         c.signatureData = sig
+      default:
+         c.unknownRecords[recType] = valBytes
       }
    }
    return n, nil
@@ -210,11 +147,38 @@ func (c *certificate) encode() []byte {
    var raw []byte
    var lengthToSignature uint32
 
-   for _, record := range c.records {
-      if record.Type == objTypeSignature {
+   for _, recType := range c.recordOrder {
+      if recType == objTypeSignature {
          lengthToSignature = uint32(16 + len(raw))
       }
-      raw = append(raw, record.encode()...)
+
+      var valBytes []byte
+      switch recType {
+      case objTypeBasic:
+         valBytes = c.certificateInfo.encode()
+      case objTypeDevice:
+         valBytes = c.deviceInfo.encode()
+      case objTypeFeature:
+         valBytes = c.features.encode()
+      case objTypeKey:
+         valBytes = c.keyInfo.encode()
+      case objTypeManufacturer:
+         valBytes = c.manufacturerInfo.encode()
+      case objTypeSignature:
+         valBytes = c.signatureData.encode()
+      default:
+         valBytes = c.unknownRecords[recType]
+      }
+
+      flags := uint16(1)
+      if recType == objTypeManufacturer {
+         flags = 0
+      }
+
+      raw = binary.BigEndian.AppendUint16(raw, flags)
+      raw = binary.BigEndian.AppendUint16(raw, recType)
+      raw = binary.BigEndian.AppendUint32(raw, uint32(len(valBytes)+8))
+      raw = append(raw, valBytes...)
    }
 
    if lengthToSignature == 0 {
