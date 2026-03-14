@@ -11,21 +11,21 @@ import (
    "log"
 )
 
-type eccKey struct {
+type EccKey struct {
    Curve  uint16
    Length uint16
    Value  []byte
 }
 
-func (e *eccKey) encode() []byte {
+func (e *EccKey) encode() []byte {
    data := binary.BigEndian.AppendUint16(nil, e.Curve)
    data = binary.BigEndian.AppendUint16(data, e.Length)
    return append(data, e.Value...)
 }
 
 // decodeEccKey decodes a byte slice into an ECCKey structure.
-func decodeEccKey(data []byte) *eccKey {
-   e := &eccKey{}
+func decodeEccKey(data []byte) *EccKey {
+   e := &EccKey{}
    e.Curve = binary.BigEndian.Uint16(data)
    data = data[2:]
    e.Length = binary.BigEndian.Uint16(data)
@@ -44,12 +44,12 @@ type KeyData struct {
    Usage Features
 }
 
-// New initializes a new key with provided data and type.
-func (k *KeyData) New(data []byte, Type int) {
+// initialize initializes a new key with provided data and type.
+func (k *KeyData) initialize(data []byte, Type int) {
    k.KeyType = 1  // Assuming type 1 is for ECDSA keys
    k.Length = 512 // Assuming key length in bits
    copy(k.PublicKey[:], data)
-   k.Usage.New(Type)
+   k.Usage.initialize(Type)
 }
 
 // encode encodes the key structure into a byte slice.
@@ -82,12 +82,12 @@ type KeyInfo struct {
    Keys    []KeyData
 }
 
-// New initializes a new KeyInfo with signing and encryption keys.
-func (k *KeyInfo) New(signingKey, encryptKey []byte) {
+// initialize initializes a new KeyInfo with signing and encryption keys.
+func (k *KeyInfo) initialize(signingKey, encryptKey []byte) {
    k.Entries = 2
    k.Keys = make([]KeyData, 2)
-   k.Keys[0].New(signingKey, 1) // Type 1 for signing key
-   k.Keys[1].New(encryptKey, 2) // Type 2 for encryption key
+   k.Keys[0].initialize(signingKey, 1) // Type 1 for signing key
+   k.Keys[1].initialize(encryptKey, 2) // Type 2 for encryption key
 }
 
 // encode encodes the KeyInfo structure into a byte slice.
@@ -118,7 +118,7 @@ type xmlKey struct {
    X         [32]byte
 }
 
-func (x *xmlKey) New() error {
+func (x *xmlKey) initialize() error {
    privBytes := [32]byte{1}
 
    privECDH, err := ecdh.P256().NewPrivateKey(privBytes[:])
@@ -177,7 +177,7 @@ func decodeContentKey(data []byte) *ContentKey {
 }
 
 // decrypt returns the raw decrypted payload.
-func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) ([]byte, error) {
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *AuxKeys) ([]byte, error) {
    log.Println("PlayReady cipher type", c.CipherType)
    switch c.CipherType {
    case 3:
@@ -188,7 +188,7 @@ func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) ([]byt
    return nil, errors.New("cannot decrypt key")
 }
 
-func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) ([]byte, error) {
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *AuxKeys) ([]byte, error) {
    rootKeyInfo := c.Value[:144]
    rootKey := rootKeyInfo[128:]
    leafKeys := c.Value[144:]

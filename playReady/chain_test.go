@@ -42,8 +42,7 @@ func TestKey(t *testing.T) {
          t.Fatal(err)
       }
       UuidOrGuid(kid)
-      // Calls generated exported function
-      data, err = certificate.GenerateLicenseRequest(signingKey, kid)
+      data, err = certificate.LicenseRequestBytes(signingKey, kid)
       if err != nil {
          t.Fatal(err)
       }
@@ -105,7 +104,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(SL2000.dir+"/chain.txt", certificate.Encode())
+   err = write_file(SL2000.dir+"/chain.txt", certificate.Bytes())
    if err != nil {
       t.Fatal(err)
    }

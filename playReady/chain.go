@@ -43,8 +43,8 @@ func ParseChain(data []byte) (*Chain, error) {
    return c, nil
 }
 
-// Encode encodes the Chain into a byte slice.
-func (c *Chain) Encode() []byte {
+// Bytes encodes the Chain into a byte slice.
+func (c *Chain) Bytes() []byte {
    var certsData []byte
    for _, cert := range c.Certs {
       certsData = append(certsData, cert.encode()...)
@@ -112,22 +112,22 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
 
    var info CertificateInfo
    digest := sha256.Sum256(signPub)
-   info.New(c.Certs[0].CertificateInfo.SecurityLevel, digest[:])
+   info.initialize(c.Certs[0].CertificateInfo.SecurityLevel, digest[:])
    unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeBasic)
    unsignedCert.CertificateInfo = &info
 
    var dev Device
-   dev.New()
+   dev.initialize()
    unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeDevice)
    unsignedCert.DeviceInfo = &dev
 
    var feat Features
-   feat.New(0xD) // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
+   feat.initialize(0xD) // SCALABLE with SL2000, SUPPORTS_PR3_FEATURES
    unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeFeature)
    unsignedCert.Features = &feat
 
    var key KeyInfo
-   key.New(signPub, encPub)
+   key.initialize(signPub, encPub)
    unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeKey)
    unsignedCert.KeyInfo = &key
 
@@ -138,7 +138,7 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    // To compute dynamic lengths properly in encode(), we append a dummy signature
    // structure so the exact header bytes can be fully calculated for digest signing.
    var dummySig EcdsaSignature
-   dummySig.New(make([]byte, 64), modelPub)
+   dummySig.initialize(make([]byte, 64), modelPub)
    unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, objTypeSignature)
    unsignedCert.SignatureData = &dummySig
 
@@ -157,7 +157,7 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    sigS.FillBytes(sign[32:])
 
    var signatureData EcdsaSignature
-   signatureData.New(sign[:], modelPub)
+   signatureData.initialize(sign[:], modelPub)
 
    // Replace the dummy signature with the authentic one
    unsignedCert.SignatureData = &signatureData
@@ -167,10 +167,9 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    return nil
 }
 
-// GenerateLicenseRequest creates the XML body for a license acquisition request.
-func (c *Chain) GenerateLicenseRequest(signingKey *ecdsa.PrivateKey, kid []byte) ([]byte, error) {
+func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([]byte, error) {
    var key xmlKey
-   err := key.New()
+   err := key.initialize()
    if err != nil {
       return nil, err
    }
@@ -232,7 +231,7 @@ func (c *Chain) GenerateLicenseRequest(signingKey *ecdsa.PrivateKey, kid []byte)
 func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    value := xml.Data{
       CertificateChains: xml.CertificateChains{
-         CertificateChain: c.Encode(),
+         CertificateChain: c.Bytes(),
       },
       Features: xml.Features{
          Feature: xml.Feature{"AESCBC"}, // SCALABLE

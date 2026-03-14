@@ -207,7 +207,7 @@ func (c *CertificateInfo) encode() []byte {
    return append(data, c.ClientId[:]...)
 }
 
-func (c *CertificateInfo) New(securityLevel uint32, digest []byte) {
+func (c *CertificateInfo) initialize(securityLevel uint32, digest []byte) {
    c.SecurityLevel = securityLevel
    c.InfoType = 2
    copy(c.Digest[:], digest)
@@ -236,17 +236,17 @@ func decodeCertificateInfo(data []byte) *CertificateInfo {
 // Manufacturer represents manufacturer details.
 type Manufacturer struct {
    Flags            uint32
-   ManufacturerName ManufacturerInfo
-   ModelName        ManufacturerInfo
-   ModelNumber      ManufacturerInfo
+   ManufacturerName string
+   ModelName        string
+   ModelNumber      string
 }
 
 // encode encodes the manufacturer structure into a byte slice.
 func (m *Manufacturer) encode() []byte {
    data := binary.BigEndian.AppendUint32(nil, m.Flags)
-   data = append(data, m.ManufacturerName.encode()...)
-   data = append(data, m.ModelName.encode()...)
-   return append(data, m.ModelNumber.encode()...)
+   data = append(data, encodePaddedString(m.ManufacturerName)...)
+   data = append(data, encodePaddedString(m.ModelName)...)
+   return append(data, encodePaddedString(m.ModelNumber)...)
 }
 
 // decodeManufacturer decodes a byte slice into a new Manufacturer structure.
@@ -255,34 +255,29 @@ func decodeManufacturer(data []byte) *Manufacturer {
    m.Flags = binary.BigEndian.Uint32(data)
    data = data[4:]
    var n int
-   m.ManufacturerName, n = decodeManufacturerInfo(data)
+   m.ManufacturerName, n = decodePaddedString(data)
    data = data[n:]
-   m.ModelName, n = decodeManufacturerInfo(data)
+   m.ModelName, n = decodePaddedString(data)
    data = data[n:]
-   m.ModelNumber, _ = decodeManufacturerInfo(data)
+   m.ModelNumber, _ = decodePaddedString(data)
    return m
 }
 
-// ManufacturerInfo contains a length-prefixed string.
-type ManufacturerInfo struct {
-   Length uint32
-   Value  string
+// decodePaddedString decodes a 4-byte length-prefixed string padded to a multiple of 4 bytes.
+func decodePaddedString(data []byte) (string, int) {
+   length := binary.BigEndian.Uint32(data)
+   paddedLength := (length + 3) &^ 3
+   val := string(data[4 : 4+length])
+   return val, int(4 + paddedLength)
 }
 
-// decodeManufacturerInfo decodes a byte slice into a ManufacturerInfo structure.
-func decodeManufacturerInfo(data []byte) (ManufacturerInfo, int) {
-   m := ManufacturerInfo{}
-   m.Length = binary.BigEndian.Uint32(data)
-   n := 4
-   // Data is padded to a multiple of 4 bytes.
-   padded_length := (m.Length + 3) &^ 3
-   m.Value = string(data[n:][:padded_length])
-   n += int(padded_length)
-   return m, n
-}
-
-// encode encodes the ManufacturerInfo structure into a byte slice.
-func (m *ManufacturerInfo) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, m.Length)
-   return append(data, m.Value...)
+// encodePaddedString encodes a string into a 4-byte length-prefixed slice, padded to a multiple of 4 bytes.
+func encodePaddedString(val string) []byte {
+   length := uint32(len(val))
+   paddedLength := (length + 3) &^ 3
+   // make auto zero-initializes, giving us our \x00 padding for free
+   data := make([]byte, int(4+paddedLength))
+   binary.BigEndian.PutUint32(data, length)
+   copy(data[4:], val)
+   return data
 }

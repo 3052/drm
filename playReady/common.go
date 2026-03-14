@@ -59,25 +59,25 @@ func UuidOrGuid(data []byte) {
    data[6], data[7] = data[7], data[6]
 }
 
-type auxKey struct {
+type AuxKey struct {
    Location uint32
    Key      [16]byte
 }
 
-func decodeAuxKey(data []byte) (auxKey, int) {
-   a := auxKey{}
+func decodeAuxKey(data []byte) (AuxKey, int) {
+   a := AuxKey{}
    a.Location = binary.BigEndian.Uint32(data)
    n := 4
    n += copy(a.Key[:], data[n:])
    return a, n
 }
 
-type auxKeys struct {
+type AuxKeys struct {
    Count uint16
-   Keys  []auxKey
+   Keys  []AuxKey
 }
 
-func (a *auxKeys) encode() []byte {
+func (a *AuxKeys) encode() []byte {
    data := binary.BigEndian.AppendUint16(nil, a.Count)
    for _, key := range a.Keys {
       data = binary.BigEndian.AppendUint32(data, key.Location)
@@ -86,11 +86,11 @@ func (a *auxKeys) encode() []byte {
    return data
 }
 
-func decodeAuxKeys(data []byte) *auxKeys {
-   a := &auxKeys{}
+func decodeAuxKeys(data []byte) *AuxKeys {
+   a := &AuxKeys{}
    a.Count = binary.BigEndian.Uint16(data)
    data = data[2:]
-   a.Keys = make([]auxKey, a.Count)
+   a.Keys = make([]AuxKey, a.Count)
    for i := range a.Count {
       key, n := decodeAuxKey(data)
       a.Keys[i] = key
@@ -105,7 +105,7 @@ type Device struct {
    MaxLicenseChainDepth uint32
 }
 
-func (d *Device) New() {
+func (d *Device) initialize() {
    d.MaxLicenseSize = 10240
    d.MaxHeaderSize = 15360
    d.MaxLicenseChainDepth = 2
@@ -130,7 +130,7 @@ type Features struct {
    Features []uint32
 }
 
-func (f *Features) New(Type int) {
+func (f *Features) initialize(Type int) {
    f.Entries = 1
    f.Features = []uint32{uint32(Type)}
 }
@@ -168,13 +168,6 @@ func (f *ftlv) encode() []byte {
    return append(data, f.Value...)
 }
 
-func (f *ftlv) New(flags, Type int, value []byte) {
-   f.Flags = uint16(flags)
-   f.Type = uint16(Type)
-   f.Length = uint32(len(value) + 8)
-   f.Value = value
-}
-
 func decodeFtlv(data []byte) (ftlv, int) {
    f := ftlv{}
    f.Flags = binary.BigEndian.Uint16(data)
@@ -188,20 +181,20 @@ func decodeFtlv(data []byte) (ftlv, int) {
    return f, n
 }
 
-type signature struct {
+type Signature struct {
    Type   uint16
    Length uint16
    Data   []byte
 }
 
-func (s *signature) encode() []byte {
+func (s *Signature) encode() []byte {
    data := binary.BigEndian.AppendUint16(nil, s.Type)
    data = binary.BigEndian.AppendUint16(data, s.Length)
    return append(data, s.Data...)
 }
 
-func decodeSignature(data []byte) *signature {
-   s := &signature{}
+func decodeSignature(data []byte) *Signature {
+   s := &Signature{}
    s.Type = binary.BigEndian.Uint16(data)
    data = data[2:]
    s.Length = binary.BigEndian.Uint16(data)
