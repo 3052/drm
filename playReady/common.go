@@ -77,6 +77,15 @@ type auxKeys struct {
    Keys  []auxKey
 }
 
+func (a *auxKeys) encode() []byte {
+   data := binary.BigEndian.AppendUint16(nil, a.Count)
+   for _, key := range a.Keys {
+      data = binary.BigEndian.AppendUint32(data, key.Location)
+      data = append(data, key.Key[:]...)
+   }
+   return data
+}
+
 func decodeAuxKeys(data []byte) *auxKeys {
    a := &auxKeys{}
    a.Count = binary.BigEndian.Uint16(data)
@@ -183,6 +192,12 @@ type signature struct {
    Type   uint16
    Length uint16
    Data   []byte
+}
+
+func (s *signature) encode() []byte {
+   data := binary.BigEndian.AppendUint16(nil, s.Type)
+   data = binary.BigEndian.AppendUint16(data, s.Length)
+   return append(data, s.Data...)
 }
 
 func decodeSignature(data []byte) *signature {

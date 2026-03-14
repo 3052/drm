@@ -13,7 +13,13 @@ import (
 
 func (l *License) verify(contentIntegrity []byte) error {
    data := l.encode()
-   data = data[:len(data)-int(l.Signature.Length)]
+
+   // The MAC is calculated over the entire license EXCEPT the Signature FTLV.
+   // The Signature FTLV is strictly the last object in the Outer Container.
+   // FTLV header (8 bytes) + Signature header (4 bytes) + Signature Data
+   sigLen := 8 + 4 + len(l.Signature.Data)
+   data = data[:len(data)-sigLen]
+
    block, err := aes.NewCipher(contentIntegrity)
    if err != nil {
       return err
@@ -27,23 +33,69 @@ func (l *License) verify(contentIntegrity []byte) error {
 
 // License represents a parsed PlayReady license.
 type License struct {
-   Magic          [4]byte
-   Offset         uint16
-   Version        uint16
-   RightsID       [16]byte
-   OuterContainer ftlv
-   ContentKey     *ContentKey
-   EccKey         *eccKey
-   Signature      *signature
-   AuxKeyObject   *auxKeys
+   Magic    [4]byte
+   Offset   uint16
+   Version  uint16
+   RightsID [16]byte
+
+   ContentKey   *ContentKey
+   EccKey       *eccKey
+   Signature    *signature
+   AuxKeyObject *auxKeys
+
+   // Container dynamics matching the certificate pattern
+   outerContainerFlags uint16
+   outerOrder          []uint16
+   outerUnknown        map[uint16][]byte
+   outerFlags          map[uint16]uint16
+
+   keyMaterialOrder   []uint16
+   keyMaterialUnknown map[uint16][]byte
+   keyMaterialFlags   map[uint16]uint16
 }
 
 func (l *License) encode() []byte {
+   var keyMaterialRaw []byte
+   for _, recType := range l.keyMaterialOrder {
+      var valBytes []byte
+      switch xmrType(recType) {
+      case contentKeyEntryType:
+         valBytes = l.ContentKey.encode()
+      case deviceKeyEntryType:
+         valBytes = l.EccKey.encode()
+      case auxKeyEntryType:
+         valBytes = l.AuxKeyObject.encode()
+      default:
+         valBytes = l.keyMaterialUnknown[recType]
+      }
+      flags := l.keyMaterialFlags[recType]
+      f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
+      keyMaterialRaw = append(keyMaterialRaw, f.encode()...)
+   }
+
+   var outerRaw []byte
+   for _, recType := range l.outerOrder {
+      var valBytes []byte
+      switch xmrType(recType) {
+      case keyMaterialContainerEntryType:
+         valBytes = keyMaterialRaw
+      case signatureEntryType:
+         valBytes = l.Signature.encode()
+      default:
+         valBytes = l.outerUnknown[recType]
+      }
+      flags := l.outerFlags[recType]
+      f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
+      outerRaw = append(outerRaw, f.encode()...)
+   }
+
    data := l.Magic[:]
    data = binary.BigEndian.AppendUint16(data, l.Offset)
    data = binary.BigEndian.AppendUint16(data, l.Version)
    data = append(data, l.RightsID[:]...)
-   return append(data, l.OuterContainer.encode()...)
+
+   f := ftlv{Flags: l.outerContainerFlags, Type: uint16(outerContainerEntryType), Length: uint32(len(outerRaw) + 8), Value: outerRaw}
+   return append(data, f.encode()...)
 }
 
 func (l *License) decode(data []byte) error {
@@ -56,23 +108,34 @@ func (l *License) decode(data []byte) error {
    copied = copy(l.RightsID[:], data)
    data = data[copied:]
 
-   l.OuterContainer, _ = decodeFtlv(data)
+   outerContainer, _ := decodeFtlv(data)
+   l.outerContainerFlags = outerContainer.Flags
+
+   l.outerOrder = nil
+   l.outerUnknown = make(map[uint16][]byte)
+   l.outerFlags = make(map[uint16]uint16)
+
+   l.keyMaterialOrder = nil
+   l.keyMaterialUnknown = make(map[uint16][]byte)
+   l.keyMaterialFlags = make(map[uint16]uint16)
 
    var outerOffset int
-   for outerOffset < int(l.OuterContainer.Length)-16 {
-      outerValue, outerN := decodeFtlv(l.OuterContainer.Value[outerOffset:])
+   for outerOffset < len(outerContainer.Value) {
+      outerValue, outerN := decodeFtlv(outerContainer.Value[outerOffset:])
       outerOffset += outerN
 
+      l.outerOrder = append(l.outerOrder, outerValue.Type)
+      l.outerFlags[outerValue.Type] = outerValue.Flags
+
       switch xmrType(outerValue.Type) {
-      case globalPolicyContainerEntryType: // 2
-         // Rakuten
-      case playbackPolicyContainerEntryType: // 4
-         // Rakuten
       case keyMaterialContainerEntryType: // 9
          var innerOffset int
-         for innerOffset < int(outerValue.Length)-16 {
+         for innerOffset < len(outerValue.Value) {
             innerValue, innerN := decodeFtlv(outerValue.Value[innerOffset:])
             innerOffset += innerN
+
+            l.keyMaterialOrder = append(l.keyMaterialOrder, innerValue.Type)
+            l.keyMaterialFlags[innerValue.Type] = innerValue.Flags
 
             switch xmrType(innerValue.Type) {
             case contentKeyEntryType: // 10
@@ -82,14 +145,13 @@ func (l *License) decode(data []byte) error {
             case auxKeyEntryType: // 81
                l.AuxKeyObject = decodeAuxKeys(innerValue.Value)
             default:
-               return errors.New("FTLV.type")
+               l.keyMaterialUnknown[innerValue.Type] = innerValue.Value
             }
          }
       case signatureEntryType: // 11
          l.Signature = decodeSignature(outerValue.Value)
-         l.Signature.Length = uint16(outerValue.Length)
       default:
-         return errors.New("FTLV.type")
+         l.outerUnknown[outerValue.Type] = outerValue.Value
       }
    }
    return nil

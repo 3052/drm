@@ -17,6 +17,12 @@ type eccKey struct {
    Value  []byte
 }
 
+func (e *eccKey) encode() []byte {
+   data := binary.BigEndian.AppendUint16(nil, e.Curve)
+   data = binary.BigEndian.AppendUint16(data, e.Length)
+   return append(data, e.Value...)
+}
+
 // decodeEccKey decodes a byte slice into an ECCKey structure.
 func decodeEccKey(data []byte) *eccKey {
    e := &eccKey{}
@@ -145,6 +151,14 @@ type ContentKey struct {
    CipherType uint16
    Length     uint16
    Value      []byte
+}
+
+func (c *ContentKey) encode() []byte {
+   data := append([]byte(nil), c.KeyID[:]...)
+   data = binary.BigEndian.AppendUint16(data, c.KeyType)
+   data = binary.BigEndian.AppendUint16(data, c.CipherType)
+   data = binary.BigEndian.AppendUint16(data, c.Length)
+   return append(data, c.Value...)
 }
 
 // decodeContentKey decodes a byte slice into a new ContentKey structure.
