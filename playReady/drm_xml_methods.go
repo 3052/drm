@@ -1,10 +1,9 @@
+// drm_xml_methods.go
 package playReady
 
 import (
    "crypto/ecdsa"
    "encoding/base64"
-   "encoding/xml"
-   "errors"
 )
 
 func (b Bytes) MarshalText() ([]byte, error) {
@@ -20,44 +19,17 @@ func (b *Bytes) UnmarshalText(data []byte) error {
    return nil
 }
 
-func (e *Envelope) Marshal() ([]byte, error) {
-   return xml.Marshal(e)
-}
-
-func (e *EnvelopeResponse) Unmarshal(data []byte) error {
-   err := xml.Unmarshal(data, e)
-   if err != nil {
-      return err
-   }
-   if e.Body.Fault != nil {
-      return errors.New(e.Body.Fault.Fault)
-   }
-   return nil
-}
-
-func (d *Data) Marshal() ([]byte, error) {
-   return xml.Marshal(d)
-}
-
-func (l *La) Marshal() ([]byte, error) {
-   return xml.Marshal(l)
-}
-
-func (s *SignedInfo) Marshal() ([]byte, error) {
-   return xml.Marshal(s)
-}
-
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte) (*La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
-      return La{}, err
+      return nil, err
    }
    cipherValue, err := elGamalEncrypt(pubKey, genKey)
    if err != nil {
-      return La{}, err
+      return nil, err
    }
 
-   return La{
+   return &La{
       XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
       Id:      "SignedData",
       Version: "1",

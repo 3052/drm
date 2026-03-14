@@ -1,3 +1,4 @@
+// certificate.go
 package playReady
 
 import (
@@ -55,7 +56,7 @@ func (c *certificate) decode(data []byte) (int, error) {
    n += 4
    length := binary.BigEndian.Uint32(data[n:])
    n += 4
-   _ = binary.BigEndian.Uint32(data[n:]) // skip lengthToSignature, dynamically evaluated
+   // skip lengthToSignature, dynamically evaluated
    n += 4
 
    certDataLen := int(length - 16)
@@ -71,7 +72,7 @@ func (c *certificate) decode(data []byte) (int, error) {
          break
       }
 
-      _ = binary.BigEndian.Uint16(certData[n1:]) // skip flags, we re-apply them on encode
+      // skip flags, we re-apply them on encode
       recType := binary.BigEndian.Uint16(certData[n1+2 : n1+4])
       recLen := binary.BigEndian.Uint32(certData[n1+4 : n1+8])
 
@@ -86,29 +87,18 @@ func (c *certificate) decode(data []byte) (int, error) {
 
       switch recType {
       case objTypeBasic:
-         info := &certificateInfo{}
-         info.decode(valBytes)
-         c.certificateInfo = info
+         c.certificateInfo = decodeCertificateInfo(valBytes)
       case objTypeDevice:
-         dev := &device{}
-         dev.decode(valBytes)
-         c.deviceInfo = dev
+         c.deviceInfo = decodeDevice(valBytes)
       case objTypeFeature:
-         feat := &features{}
-         feat.decode(valBytes)
+         feat, _ := decodeFeatures(valBytes)
          c.features = feat
       case objTypeKey:
-         key := &keyInfo{}
-         key.decode(valBytes)
-         c.keyInfo = key
+         c.keyInfo = decodeKeyInfo(valBytes)
       case objTypeManufacturer:
-         man := &manufacturer{}
-         man.decode(valBytes)
-         c.manufacturerInfo = man
+         c.manufacturerInfo = decodeManufacturer(valBytes)
       case objTypeSignature:
-         sig := &ecdsaSignature{}
-         sig.decode(valBytes)
-         c.signatureData = sig
+         c.signatureData = decodeEcdsaSignature(valBytes)
       default:
          c.unknownRecords[recType] = valBytes
       }
@@ -224,7 +214,9 @@ func (c *certificateInfo) New(securityLevel uint32, digest []byte) {
    c.expiry = 4294967295
 }
 
-func (c *certificateInfo) decode(data []byte) {
+// decodeCertificateInfo decodes a byte slice into a new certificateInfo structure.
+func decodeCertificateInfo(data []byte) *certificateInfo {
+   c := &certificateInfo{}
    n := copy(c.certificateId[:], data)
    data = data[n:]
    c.securityLevel = binary.BigEndian.Uint32(data)
@@ -238,6 +230,7 @@ func (c *certificateInfo) decode(data []byte) {
    c.expiry = binary.BigEndian.Uint32(data)
    data = data[4:]
    copy(c.clientId[:], data)
+   return c
 }
 
 // manufacturer represents manufacturer details.
@@ -256,15 +249,18 @@ func (m *manufacturer) encode() []byte {
    return append(data, m.modelNumber.encode()...)
 }
 
-// decode decodes a byte slice into the manufacturer structure.
-func (m *manufacturer) decode(data []byte) {
+// decodeManufacturer decodes a byte slice into a new manufacturer structure.
+func decodeManufacturer(data []byte) *manufacturer {
+   m := &manufacturer{}
    m.flags = binary.BigEndian.Uint32(data)
    data = data[4:]
-   n := m.manufacturerName.decode(data)
+   var n int
+   m.manufacturerName, n = decodeManufacturerInfo(data)
    data = data[n:]
-   n = m.modelName.decode(data)
+   m.modelName, n = decodeManufacturerInfo(data)
    data = data[n:]
-   m.modelNumber.decode(data)
+   m.modelNumber, _ = decodeManufacturerInfo(data)
+   return m
 }
 
 // manufacturerInfo contains a length-prefixed string.
@@ -273,15 +269,16 @@ type manufacturerInfo struct {
    value  string
 }
 
-// decode decodes a byte slice into the manufacturerInfo structure.
-func (m *manufacturerInfo) decode(data []byte) int {
+// decodeManufacturerInfo decodes a byte slice into a manufacturerInfo structure.
+func decodeManufacturerInfo(data []byte) (manufacturerInfo, int) {
+   m := manufacturerInfo{}
    m.length = binary.BigEndian.Uint32(data)
    n := 4
    // Data is padded to a multiple of 4 bytes.
    padded_length := (m.length + 3) &^ 3
    m.value = string(data[n:][:padded_length])
    n += int(padded_length)
-   return n
+   return m, n
 }
 
 // encode encodes the manufacturerInfo structure into a byte slice.

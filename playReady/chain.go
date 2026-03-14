@@ -1,3 +1,4 @@
+// chain.go
 package playReady
 
 import (
@@ -7,6 +8,7 @@ import (
    "crypto/ecdsa"
    "crypto/sha256"
    "encoding/binary"
+   "encoding/xml"
    "errors"
    "github.com/emmansun/gmsm/padding"
    "slices"
@@ -21,7 +23,7 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
          Feature: Feature{"AESCBC"}, // SCALABLE
       },
    }
-   data, err := value.Marshal()
+   data, err := xml.Marshal(value)
    if err != nil {
       return nil, err
    }
@@ -52,7 +54,7 @@ func DecodeChain(data []byte) (*Chain, error) {
    data = data[copied:]
    c.version = binary.BigEndian.Uint32(data)
    data = data[4:]
-   _ = binary.BigEndian.Uint32(data) // length (skipping, dynamically evaluated)
+   // length (skipping, dynamically evaluated)
    data = data[4:]
    c.flags = binary.BigEndian.Uint32(data)
    data = data[4:]
@@ -212,7 +214,7 @@ func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([
    if err != nil {
       return nil, err
    }
-   laData, err := laRequest.Marshal()
+   laData, err := xml.Marshal(laRequest)
    if err != nil {
       return nil, err
    }
@@ -224,7 +226,7 @@ func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([
          DigestValue: laDigest[:],
       },
    }
-   signedData, err := signedInfo.Marshal()
+   signedData, err := xml.Marshal(signedInfo)
    if err != nil {
       return nil, err
    }
@@ -256,5 +258,5 @@ func (c *Chain) GenerateLicenseRequest(signing *ecdsa.PrivateKey, kid []byte) ([
          },
       },
    }
-   return envelope.Marshal()
+   return xml.Marshal(envelope)
 }

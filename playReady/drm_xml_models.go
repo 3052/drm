@@ -1,3 +1,4 @@
+// drm_xml_models.go
 package playReady
 
 import "encoding/xml"
@@ -107,7 +108,7 @@ type Features struct {
 
 type InnerChallenge struct {
    XmlNs     string `xml:"xmlns,attr"`
-   La        La
+   La        *La
    Signature Signature
 }
 
