@@ -1,3 +1,4 @@
+// crypto.go
 package playReady
 
 import (
@@ -142,7 +143,8 @@ func (s *ecdsaSignature) encode() []byte {
    return append(encBuf, s.IssuerKey...)
 }
 
-func (s *ecdsaSignature) decode(data []byte) {
+func decodeEcdsaSignature(data []byte) *ecdsaSignature {
+   s := &ecdsaSignature{}
    s.signatureType = binary.BigEndian.Uint16(data)
    data = data[2:]
    s.signatureLength = binary.BigEndian.Uint16(data)
@@ -153,4 +155,5 @@ func (s *ecdsaSignature) decode(data []byte) {
    s.issuerLength = binary.BigEndian.Uint32(data)
    data = data[4:]
    s.IssuerKey = data
+   return s
 }
