@@ -1,11 +1,8 @@
 # servers
 
 - <https://refapp.hbbtv.org/dash/test_dashjs_sl3000.html?video=sl3000>
-- http://playready.directtaps.net/pr/svc/rightsmanager.asmx?PlayRight=1&SecurityLevel=2000
 - https://reference.dashif.org/dash.js/nightly/samples/drm/playready.html
 - https://sample.pallycon.com/demo/drm-demo/shaka
-- https://testweb.playready.microsoft.com
-- https://testweb.playready.microsoft.com/Tool/PlayerHAS
 
 ~~~
 mitmproxy --set stream_large_bodies=9m

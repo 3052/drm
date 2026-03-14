@@ -8,6 +8,8 @@ delete:
 HKEY_CURRENT_USER\Software\Hex-Rays
 ~~~
 
+## create c file
+
 1. new
 2. `ICE_REPRO\Linker\linkrepro\Windows.Media.Protection.PlayReady.dll`
 3. debug information, yes
@@ -18,3 +20,10 @@ functions in the database (besides those marked as library functions) and
 writes the result to a text file.
 
 https://hex-rays.com/blog/igors-tip-of-the-week-40-decompiler-basics
+
+## savefile
+
+~~~c
+auto file = fopen("g1", "wb");
+savefile(file, 0, 0x00CD3190, 0x00CD37CC - 0x00CD3190);
+~~~

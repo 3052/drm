@@ -11,6 +11,32 @@ import (
    "github.com/emmansun/gmsm/cbcmac"
 )
 
+// ParseLicense processes XML license data and returns the parsed License object.
+func ParseLicense(data []byte) (*License, error) {
+   l := &License{} // single letter 'l' allowed because it is the return variable
+   var envelope xml.EnvelopeResponse
+   err := xml.Unmarshal(data, &envelope)
+   if err != nil {
+      return nil, err
+   }
+   if envelope.Body.Fault != nil {
+      return nil, errors.New(envelope.Body.Fault.Fault)
+   }
+   err = l.decode(envelope.
+      Body.
+      AcquireLicenseResponse.
+      AcquireLicenseResult.
+      Response.
+      LicenseResponse.
+      Licenses.
+      License,
+   )
+   if err != nil {
+      return nil, err
+   }
+   return l, nil
+}
+
 func (l *License) verify(contentIntegrity []byte) error {
    data := l.encode()
 
@@ -155,32 +181,6 @@ func (l *License) decode(data []byte) error {
       }
    }
    return nil
-}
-
-// ParseLicense processes XML license data and returns the parsed License object.
-func ParseLicense(data []byte) (*License, error) {
-   l := &License{} // single letter 'l' allowed because it is the return variable
-   var envelope xml.EnvelopeResponse
-   err := xml.Unmarshal(data, &envelope)
-   if err != nil {
-      return nil, err
-   }
-   if envelope.Body.Fault != nil {
-      return nil, errors.New(envelope.Body.Fault.Fault)
-   }
-   err = l.decode(envelope.
-      Body.
-      AcquireLicenseResponse.
-      AcquireLicenseResult.
-      Response.
-      LicenseResponse.
-      Licenses.
-      License,
-   )
-   if err != nil {
-      return nil, err
-   }
-   return l, nil
 }
 
 // Decrypt validates the license for the given device key, verifies its signature,

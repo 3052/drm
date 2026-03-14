@@ -12,7 +12,6 @@
 - http://download.microsoft.com/download/E/A/4/EA470677-6C3C-4AFE-8A86-A196ADFD0F78/Content%20Decryption%20Module%20Interface%20Specification.pdf
 - https://learn.microsoft.com/playready/overview/initialization
 - https://learn.microsoft.com/playready/packaging/content-encryption
-- https://test.playready.microsoft.com/service/rightsmanager.asmx?op=AcquireLicense
 
 ## packetstormsecurity.com
 

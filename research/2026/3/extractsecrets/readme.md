@@ -18,17 +18,11 @@ lib\armeabi-v7a\libAIVPlayReadyLicensing.so
 
 fail:
 
-~~~
-> play -i com.hulu.plus
-~~~
-
-next:
-
-~~~
-> play -i com.hulu.livingroomplus -abi armeabi-v7a -leanback
-~~~
+https://apkmirror.com/apk/disney/hulu-hulu
 
 pass:
+
+https://apkmirror.com/apk/disney/hulu-android-tv
 
 ~~~
 com.hulu.livingroomplus-config.armeabi_v7a-3009846\lib\armeabi-v7a\libwkf_support.so

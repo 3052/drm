@@ -11,6 +11,20 @@ import (
    "math/big"
 )
 
+type Certificate struct {
+   Magic            [4]byte
+   Version          uint32
+   CertificateInfo  *CertificateInfo
+   DeviceInfo       *Device
+   Features         *Features
+   KeyInfo          *KeyInfo
+   ManufacturerInfo *Manufacturer
+   SignatureData    *EcdsaSignature
+
+   RecordOrder    []uint16
+   UnknownRecords map[uint16][]byte
+}
+
 // Constants for object types within the certificate structure.
 const (
    objTypeBasic            = 0x0001
@@ -49,20 +63,6 @@ func encodePaddedString(val string) []byte {
    binary.BigEndian.PutUint32(data, length)
    copy(data[4:], val)
    return data
-}
-
-type Certificate struct {
-   Magic            [4]byte
-   Version          uint32
-   CertificateInfo  *CertificateInfo
-   DeviceInfo       *Device
-   Features         *Features
-   KeyInfo          *KeyInfo
-   ManufacturerInfo *Manufacturer
-   SignatureData    *EcdsaSignature
-
-   RecordOrder    []uint16
-   UnknownRecords map[uint16][]byte
 }
 
 // decode decodes a byte slice into the Certificate structure.

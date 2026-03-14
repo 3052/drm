@@ -14,6 +14,14 @@ import (
    "slices"
 )
 
+// Chain represents a chain of certificates.
+type Chain struct {
+   Magic   [4]byte
+   Version uint32
+   Flags   uint32
+   Certs   []Certificate
+}
+
 func ParseChain(data []byte) (*Chain, error) {
    c := &Chain{}
    copied := copy(c.Magic[:], data)
@@ -248,12 +256,4 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
    cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
    return append(key.aesIv(), data...), nil
-}
-
-// Chain represents a chain of certificates.
-type Chain struct {
-   Magic   [4]byte
-   Version uint32
-   Flags   uint32
-   Certs   []Certificate
 }

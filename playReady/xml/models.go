@@ -1,10 +1,27 @@
-// xml/models.go
 package xml
 
 import (
    "encoding/base64"
    "encoding/xml"
 )
+
+type Body struct {
+   AcquireLicense         *AcquireLicense
+   AcquireLicenseResponse *struct {
+      AcquireLicenseResult struct {
+         Response struct {
+            LicenseResponse struct {
+               Licenses struct {
+                  License Bytes
+               }
+            }
+         }
+      }
+   }
+   Fault *struct {
+      Fault string `xml:"faultstring"`
+   }
+}
 
 var (
    Marshal   = xml.Marshal
@@ -35,24 +52,6 @@ type Envelope struct {
    XMLName xml.Name `xml:"soap:Envelope"`
    Soap    string   `xml:"xmlns:soap,attr"`
    Body    Body     `xml:"soap:Body"`
-}
-
-type Body struct {
-   AcquireLicense         *AcquireLicense
-   AcquireLicenseResponse *struct {
-      AcquireLicenseResult struct {
-         Response struct {
-            LicenseResponse struct {
-               Licenses struct {
-                  License Bytes
-               }
-            }
-         }
-      }
-   }
-   Fault *struct {
-      Fault string `xml:"faultstring"`
-   }
 }
 
 type EnvelopeResponse struct {
