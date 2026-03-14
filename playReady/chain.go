@@ -117,7 +117,7 @@ func (c *Chain) verify() bool {
 
 // CreateLeaf creates a new leaf certificate and adds it to the chain.
 func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
-   modelPub, err := PublicKeyBytes(modelKey)
+   modelPub, err := publicKeyBytes(modelKey)
    if err != nil {
       return err
    }
@@ -128,11 +128,11 @@ func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) e
       return errors.New("cert is not valid")
    }
 
-   signPub, err := PublicKeyBytes(signingKey)
+   signPub, err := publicKeyBytes(signingKey)
    if err != nil {
       return err
    }
-   encPub, err := PublicKeyBytes(encryptKey)
+   encPub, err := publicKeyBytes(encryptKey)
    if err != nil {
       return err
    }

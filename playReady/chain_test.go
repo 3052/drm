@@ -23,21 +23,18 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   z1, err := DecodeEcKey(data)
+   z1, err := ParseRawPrivateKey(data)
    if err != nil {
       t.Fatal(err)
    }
-
-   signingKey, err := GenerateEcKey()
+   signingKey, err := GenerateKey()
    if err != nil {
       t.Fatal(err)
    }
-
-   encryptKey, err := GenerateEcKey()
+   encryptKey, err := GenerateKey()
    if err != nil {
       t.Fatal(err)
    }
-
    err = certificate.CreateLeaf(z1, signingKey, encryptKey)
    if err != nil {
       t.Fatal(err)
@@ -119,7 +116,7 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   signingKey, err := DecodeEcKey(data)
+   signingKey, err := ParseRawPrivateKey(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -127,7 +124,7 @@ func TestKey(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   encryptKey, err := DecodeEcKey(data)
+   encryptKey, err := ParseRawPrivateKey(data)
    if err != nil {
       t.Fatal(err)
    }

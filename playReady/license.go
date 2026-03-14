@@ -118,7 +118,7 @@ func DecryptLicense(encryptKey *ecdsa.PrivateKey, data []byte) (*License, error)
    if err != nil {
       return nil, err
    }
-   pubBytes, err := PublicKeyBytes(encryptKey)
+   pubBytes, err := publicKeyBytes(encryptKey)
    if err != nil {
       return nil, err
    }

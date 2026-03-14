@@ -11,129 +11,6 @@ import (
    "log"
 )
 
-const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
-
-type ContentKey struct {
-   KeyID      [16]byte
-   KeyType    uint16
-   CipherType uint16
-   Length     uint16
-   Value      []byte
-   Integrity  [16]byte
-   Key        [16]byte
-}
-
-// decodeContentKey decodes a byte slice into a new ContentKey structure.
-func decodeContentKey(data []byte) *ContentKey {
-   c := &ContentKey{}
-   copied := copy(c.KeyID[:], data)
-   data = data[copied:]
-   c.KeyType = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.CipherType = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.Length = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.Value = data
-   return c
-}
-
-func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) error {
-   log.Println("PlayReady cipher type", c.CipherType)
-   switch c.CipherType {
-   case 3:
-      decrypted, err := elGamalDecrypt(c.Value, privKey)
-      if err != nil {
-         return err
-      }
-      copied := copy(c.Integrity[:], decrypted)
-      decrypted = decrypted[copied:]
-      copy(c.Key[:], decrypted)
-      return nil
-   case 6:
-      return c.scalable(privKey, auxKeys)
-   }
-   return errors.New("cannot decrypt key")
-}
-
-func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
-   rootKeyInfo := c.Value[:144]
-   rootKey := rootKeyInfo[128:]
-   leafKeys := c.Value[144:]
-   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
-   if err != nil {
-      return err
-   }
-   var (
-      ci [16]byte
-      ck [16]byte
-   )
-   for index := range 16 {
-      ci[index] = decrypted[index*2]
-      ck[index] = decrypted[index*2+1]
-   }
-
-   magicZero, err := hex.DecodeString(magicConstantZero)
-   if err != nil {
-      return err
-   }
-
-   rgbUplinkXkey := xorKey(ck[:], magicZero)
-   contentKeyPrime, err := aesEcbEncrypt(rgbUplinkXkey, ck[:])
-   if err != nil {
-      return err
-   }
-   auxKeyCalc, err := aesEcbEncrypt(aux.Keys[0].Key[:], contentKeyPrime)
-   if err != nil {
-      return err
-   }
-   oSecondaryKey, err := aesEcbEncrypt(rootKey, ck[:])
-   if err != nil {
-      return err
-   }
-   rgbKey, err := aesEcbEncrypt(leafKeys, auxKeyCalc)
-   if err != nil {
-      return err
-   }
-   rgbKey, err = aesEcbEncrypt(rgbKey, oSecondaryKey)
-   if err != nil {
-      return err
-   }
-   copied := copy(c.Integrity[:], rgbKey)
-   rgbKey = rgbKey[copied:]
-   copy(c.Key[:], rgbKey)
-   return nil
-}
-
-// GenerateEcKey creates a new P-256 private key and returns it.
-func GenerateEcKey() (*ecdsa.PrivateKey, error) {
-   return ecdsa.GenerateKey(elliptic.P256(), nil)
-}
-
-// DecodeEcKey decodes a raw private key byte slice into a new ecdsa.PrivateKey.
-func DecodeEcKey(data []byte) (*ecdsa.PrivateKey, error) {
-   return ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
-}
-
-// PrivateKeyBytes returns the private key bytes.
-func PrivateKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
-   ecdhKey, err := key.ECDH()
-   if err != nil {
-      return nil, err
-   }
-   return ecdhKey.Bytes(), nil
-}
-
-// PublicKeyBytes returns the public key bytes.
-func PublicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
-   ecdhKey, err := key.PublicKey.ECDH()
-   if err != nil {
-      return nil, err
-   }
-   // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
-   return ecdhKey.Bytes()[1:], nil
-}
-
 type eccKey struct {
    Curve  uint16
    Length uint16
@@ -258,4 +135,123 @@ func (x *xmlKey) aesIv() []byte {
 
 func (x *xmlKey) aesKey() []byte {
    return x.X[16:]
+}
+
+const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
+
+type ContentKey struct {
+   KeyID      [16]byte
+   KeyType    uint16
+   CipherType uint16
+   Length     uint16
+   Value      []byte
+   Integrity  [16]byte
+   Key        [16]byte
+}
+
+// decodeContentKey decodes a byte slice into a new ContentKey structure.
+func decodeContentKey(data []byte) *ContentKey {
+   c := &ContentKey{}
+   copied := copy(c.KeyID[:], data)
+   data = data[copied:]
+   c.KeyType = binary.BigEndian.Uint16(data)
+   data = data[2:]
+   c.CipherType = binary.BigEndian.Uint16(data)
+   data = data[2:]
+   c.Length = binary.BigEndian.Uint16(data)
+   data = data[2:]
+   c.Value = data
+   return c
+}
+
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) error {
+   log.Println("PlayReady cipher type", c.CipherType)
+   switch c.CipherType {
+   case 3:
+      decrypted, err := elGamalDecrypt(c.Value, privKey)
+      if err != nil {
+         return err
+      }
+      copied := copy(c.Integrity[:], decrypted)
+      decrypted = decrypted[copied:]
+      copy(c.Key[:], decrypted)
+      return nil
+   case 6:
+      return c.scalable(privKey, auxKeys)
+   }
+   return errors.New("cannot decrypt key")
+}
+
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
+   rootKeyInfo := c.Value[:144]
+   rootKey := rootKeyInfo[128:]
+   leafKeys := c.Value[144:]
+   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
+   if err != nil {
+      return err
+   }
+   var (
+      ci [16]byte
+      ck [16]byte
+   )
+   for index := range 16 {
+      ci[index] = decrypted[index*2]
+      ck[index] = decrypted[index*2+1]
+   }
+
+   magicZero, err := hex.DecodeString(magicConstantZero)
+   if err != nil {
+      return err
+   }
+
+   rgbUplinkXkey := xorKey(ck[:], magicZero)
+   contentKeyPrime, err := aesEcbEncrypt(rgbUplinkXkey, ck[:])
+   if err != nil {
+      return err
+   }
+   auxKeyCalc, err := aesEcbEncrypt(aux.Keys[0].Key[:], contentKeyPrime)
+   if err != nil {
+      return err
+   }
+   oSecondaryKey, err := aesEcbEncrypt(rootKey, ck[:])
+   if err != nil {
+      return err
+   }
+   rgbKey, err := aesEcbEncrypt(leafKeys, auxKeyCalc)
+   if err != nil {
+      return err
+   }
+   rgbKey, err = aesEcbEncrypt(rgbKey, oSecondaryKey)
+   if err != nil {
+      return err
+   }
+   copied := copy(c.Integrity[:], rgbKey)
+   rgbKey = rgbKey[copied:]
+   copy(c.Key[:], rgbKey)
+   return nil
+}
+
+func GenerateKey() (*ecdsa.PrivateKey, error) {
+   return ecdsa.GenerateKey(elliptic.P256(), nil)
+}
+
+func ParseRawPrivateKey(data []byte) (*ecdsa.PrivateKey, error) {
+   return ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
+}
+
+func PrivateKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.ECDH()
+   if err != nil {
+      return nil, err
+   }
+   return ecdhKey.Bytes(), nil
+}
+
+func publicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.PublicKey.ECDH()
+   if err != nil {
+      return nil, err
+   }
+   // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
+   return ecdhKey.Bytes()[1:], nil
 }
