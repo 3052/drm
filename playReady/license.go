@@ -95,8 +95,8 @@ func (l *License) decode(data []byte) error {
    return nil
 }
 
-// DecryptLicense processes license data using the provided ECDSA private key and returns the parsed License.
-func DecryptLicense(encryptKey *ecdsa.PrivateKey, data []byte) (*License, error) {
+// ParseLicense processes XML license data and returns the parsed License object.
+func ParseLicense(data []byte) (*License, error) {
    l := &License{} // single letter 'l' allowed because it is the return variable
    var envelope xml.EnvelopeResponse
    err := xml.Unmarshal(data, &envelope)
@@ -118,6 +118,12 @@ func DecryptLicense(encryptKey *ecdsa.PrivateKey, data []byte) (*License, error)
    if err != nil {
       return nil, err
    }
+   return l, nil
+}
+
+// Decrypt validates the license for the given device key, verifies its signature,
+// and returns the decrypted content key bytes.
+func (l *License) Decrypt(encryptKey *ecdsa.PrivateKey) ([]byte, error) {
    pubBytes, err := publicKeyBytes(encryptKey)
    if err != nil {
       return nil, err
@@ -125,13 +131,22 @@ func DecryptLicense(encryptKey *ecdsa.PrivateKey, data []byte) (*License, error)
    if !bytes.Equal(l.EccKey.Value, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
-   err = l.ContentKey.decrypt(encryptKey, l.AuxKeyObject)
+
+   decryptedKey, err := l.ContentKey.decrypt(encryptKey, l.AuxKeyObject)
    if err != nil {
       return nil, err
    }
-   err = l.verify(l.ContentKey.Integrity[:])
+
+   if len(decryptedKey) < 32 {
+      return nil, errors.New("invalid key length")
+   }
+
+   // Verify signature using the integrity block (first 16 bytes)
+   err = l.verify(decryptedKey[:16])
    if err != nil {
       return nil, err
    }
-   return l, nil
+
+   // Return only the user content key slice directly
+   return decryptedKey[16:32], nil
 }

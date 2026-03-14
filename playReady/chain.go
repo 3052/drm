@@ -14,28 +14,6 @@ import (
    "slices"
 )
 
-func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
-   value := xml.Data{
-      CertificateChains: xml.CertificateChains{
-         CertificateChain: c.Encode(),
-      },
-      Features: xml.Features{
-         Feature: xml.Feature{"AESCBC"}, // SCALABLE
-      },
-   }
-   data, err := xml.Marshal(value)
-   if err != nil {
-      return nil, err
-   }
-   block, err := aes.NewCipher(key.aesKey())
-   if err != nil {
-      return nil, err
-   }
-   data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
-   cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
-   return append(key.aesIv(), data...), nil
-}
-
 // Chain represents a chain of certificates.
 type Chain struct {
    magic   [4]byte
@@ -44,8 +22,7 @@ type Chain struct {
    certs   []certificate
 }
 
-// DecodeChain decodes a byte slice into a new Chain structure.
-func DecodeChain(data []byte) (*Chain, error) {
+func ParseChain(data []byte) (*Chain, error) {
    c := &Chain{}
    copied := copy(c.magic[:], data)
    if string(c.magic[:]) != "CHAI" {
@@ -115,8 +92,7 @@ func (c *Chain) verify() bool {
    return true
 }
 
-// CreateLeaf creates a new leaf certificate and adds it to the chain.
-func (c *Chain) CreateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
+func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
    modelPub, err := publicKeyBytes(modelKey)
    if err != nil {
       return err
@@ -259,4 +235,26 @@ func (c *Chain) GenerateLicenseRequest(signingKey *ecdsa.PrivateKey, kid []byte)
       },
    }
    return xml.Marshal(envelope)
+}
+
+func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
+   value := xml.Data{
+      CertificateChains: xml.CertificateChains{
+         CertificateChain: c.Encode(),
+      },
+      Features: xml.Features{
+         Feature: xml.Feature{"AESCBC"}, // SCALABLE
+      },
+   }
+   data, err := xml.Marshal(value)
+   if err != nil {
+      return nil, err
+   }
+   block, err := aes.NewCipher(key.aesKey())
+   if err != nil {
+      return nil, err
+   }
+   data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
+   cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
+   return append(key.aesIv(), data...), nil
 }

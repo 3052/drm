@@ -145,8 +145,6 @@ type ContentKey struct {
    CipherType uint16
    Length     uint16
    Value      []byte
-   Integrity  [16]byte
-   Key        [16]byte
 }
 
 // decodeContentKey decodes a byte slice into a new ContentKey structure.
@@ -164,31 +162,25 @@ func decodeContentKey(data []byte) *ContentKey {
    return c
 }
 
-func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) error {
+// decrypt returns the raw decrypted payload.
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *auxKeys) ([]byte, error) {
    log.Println("PlayReady cipher type", c.CipherType)
    switch c.CipherType {
    case 3:
-      decrypted, err := elGamalDecrypt(c.Value, privKey)
-      if err != nil {
-         return err
-      }
-      copied := copy(c.Integrity[:], decrypted)
-      decrypted = decrypted[copied:]
-      copy(c.Key[:], decrypted)
-      return nil
+      return elGamalDecrypt(c.Value, privKey)
    case 6:
       return c.scalable(privKey, auxKeys)
    }
-   return errors.New("cannot decrypt key")
+   return nil, errors.New("cannot decrypt key")
 }
 
-func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) ([]byte, error) {
    rootKeyInfo := c.Value[:144]
    rootKey := rootKeyInfo[128:]
    leafKeys := c.Value[144:]
    decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
    if err != nil {
-      return err
+      return nil, err
    }
    var (
       ci [16]byte
@@ -201,34 +193,27 @@ func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *auxKeys) error {
 
    magicZero, err := hex.DecodeString(magicConstantZero)
    if err != nil {
-      return err
+      return nil, err
    }
 
    rgbUplinkXkey := xorKey(ck[:], magicZero)
    contentKeyPrime, err := aesEcbEncrypt(rgbUplinkXkey, ck[:])
    if err != nil {
-      return err
+      return nil, err
    }
    auxKeyCalc, err := aesEcbEncrypt(aux.Keys[0].Key[:], contentKeyPrime)
    if err != nil {
-      return err
+      return nil, err
    }
    oSecondaryKey, err := aesEcbEncrypt(rootKey, ck[:])
    if err != nil {
-      return err
+      return nil, err
    }
    rgbKey, err := aesEcbEncrypt(leafKeys, auxKeyCalc)
    if err != nil {
-      return err
+      return nil, err
    }
-   rgbKey, err = aesEcbEncrypt(rgbKey, oSecondaryKey)
-   if err != nil {
-      return err
-   }
-   copied := copy(c.Integrity[:], rgbKey)
-   rgbKey = rgbKey[copied:]
-   copy(c.Key[:], rgbKey)
-   return nil
+   return aesEcbEncrypt(rgbKey, oSecondaryKey)
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {

@@ -10,12 +10,78 @@ import (
    "testing"
 )
 
+func TestKey(t *testing.T) {
+   data, err := os.ReadFile(SL2000.dir + "/chain.txt")
+   if err != nil {
+      t.Fatal(err)
+   }
+   certificate, err := ParseChain(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = os.ReadFile(SL2000.dir + "/signing_key.txt")
+   if err != nil {
+      t.Fatal(err)
+   }
+   signingKey, err := ParseRawPrivateKey(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = os.ReadFile(SL2000.dir + "/encrypt_key.txt")
+   if err != nil {
+      t.Fatal(err)
+   }
+   encryptKey, err := ParseRawPrivateKey(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   for _, test := range key_tests {
+      log.Print(test.url)
+      kid, err := hex.DecodeString(test.kid_wv)
+      if err != nil {
+         t.Fatal(err)
+      }
+      UuidOrGuid(kid)
+      // Calls generated exported function
+      data, err = certificate.GenerateLicenseRequest(signingKey, kid)
+      if err != nil {
+         t.Fatal(err)
+      }
+      func() {
+         resp, err := http.Post(test.url, "text/xml", bytes.NewReader(data))
+         if err != nil {
+            t.Fatal(err)
+         }
+         defer resp.Body.Close()
+         data, err = io.ReadAll(resp.Body)
+         if err != nil {
+            t.Fatal(err)
+         }
+      }()
+      licenseData, err := ParseLicense(data)
+      if err != nil {
+         t.Fatal(err)
+      }
+      key, err := licenseData.Decrypt(encryptKey)
+      if err != nil {
+         t.Fatal(err)
+      }
+      UuidOrGuid(licenseData.ContentKey.KeyID[:])
+      if hex.EncodeToString(licenseData.ContentKey.KeyID[:]) != test.kid_wv {
+         t.Fatal(".KeyID")
+      }
+      if hex.EncodeToString(key) != test.key {
+         t.Fatal(".Key")
+      }
+   }
+}
+
 func TestChain(t *testing.T) {
    data, err := os.ReadFile(SL2000.dir + SL2000.g1)
    if err != nil {
       t.Fatal(err)
    }
-   certificate, err := DecodeChain(data)
+   certificate, err := ParseChain(data)
    if err != nil {
       t.Fatal(err)
    }
@@ -35,7 +101,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   err = certificate.CreateLeaf(z1, signingKey, encryptKey)
+   err = certificate.GenerateLeaf(z1, signingKey, encryptKey)
    if err != nil {
       t.Fatal(err)
    }
@@ -102,67 +168,3 @@ var key_tests = []struct {
       url:    "https://prod-playready.rakuten.tv/v1/licensing/pr?uuid=bd497069-8a8f-40a8-b898-b5edf1327761",
    },
 }[:2]
-
-func TestKey(t *testing.T) {
-   data, err := os.ReadFile(SL2000.dir + "/chain.txt")
-   if err != nil {
-      t.Fatal(err)
-   }
-   certificate, err := DecodeChain(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = os.ReadFile(SL2000.dir + "/signing_key.txt")
-   if err != nil {
-      t.Fatal(err)
-   }
-   signingKey, err := ParseRawPrivateKey(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = os.ReadFile(SL2000.dir + "/encrypt_key.txt")
-   if err != nil {
-      t.Fatal(err)
-   }
-   encryptKey, err := ParseRawPrivateKey(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   for _, test := range key_tests {
-      log.Print(test.url)
-      kid, err := hex.DecodeString(test.kid_wv)
-      if err != nil {
-         t.Fatal(err)
-      }
-      UuidOrGuid(kid)
-      // Calls generated exported function
-      data, err = certificate.GenerateLicenseRequest(signingKey, kid)
-      if err != nil {
-         t.Fatal(err)
-      }
-      func() {
-         resp, err := http.Post(test.url, "text/xml", bytes.NewReader(data))
-         if err != nil {
-            t.Fatal(err)
-         }
-         defer resp.Body.Close()
-         data, err = io.ReadAll(resp.Body)
-         if err != nil {
-            t.Fatal(err)
-         }
-      }()
-      licenseData, err := DecryptLicense(encryptKey, data)
-      if err != nil {
-         t.Fatal(err)
-      }
-      // Accesses exported field
-      content := licenseData.ContentKey
-      UuidOrGuid(content.KeyID[:])
-      if hex.EncodeToString(content.KeyID[:]) != test.kid_wv {
-         t.Fatal(".KeyID")
-      }
-      if hex.EncodeToString(content.Key[:]) != test.key {
-         t.Fatal(".Key")
-      }
-   }
-}
