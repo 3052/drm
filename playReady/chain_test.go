@@ -105,7 +105,7 @@ func TestChain(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   err = write_file(SL2000.dir+"/chain.txt", certificate.Encode())
+   err = write_file(SL2000.dir+"/chain.txt", certificate.Bytes())
    if err != nil {
       t.Fatal(err)
    }

@@ -39,24 +39,24 @@ type License struct {
    RightsID [16]byte
 
    ContentKey   *ContentKey
-   EccKey       *eccKey
-   Signature    *signature
-   AuxKeyObject *auxKeys
+   EccKey       *EccKey
+   Signature    *Signature
+   AuxKeyObject *AuxKeys
 
    // Container dynamics matching the certificate pattern
-   outerContainerFlags uint16
-   outerOrder          []uint16
-   outerUnknown        map[uint16][]byte
-   outerFlags          map[uint16]uint16
+   OuterContainerFlags uint16
+   OuterOrder          []uint16
+   OuterUnknown        map[uint16][]byte
+   OuterFlags          map[uint16]uint16
 
-   keyMaterialOrder   []uint16
-   keyMaterialUnknown map[uint16][]byte
-   keyMaterialFlags   map[uint16]uint16
+   KeyMaterialOrder   []uint16
+   KeyMaterialUnknown map[uint16][]byte
+   KeyMaterialFlags   map[uint16]uint16
 }
 
 func (l *License) encode() []byte {
    var keyMaterialRaw []byte
-   for _, recType := range l.keyMaterialOrder {
+   for _, recType := range l.KeyMaterialOrder {
       var valBytes []byte
       switch xmrType(recType) {
       case contentKeyEntryType:
@@ -66,15 +66,15 @@ func (l *License) encode() []byte {
       case auxKeyEntryType:
          valBytes = l.AuxKeyObject.encode()
       default:
-         valBytes = l.keyMaterialUnknown[recType]
+         valBytes = l.KeyMaterialUnknown[recType]
       }
-      flags := l.keyMaterialFlags[recType]
+      flags := l.KeyMaterialFlags[recType]
       f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
       keyMaterialRaw = append(keyMaterialRaw, f.encode()...)
    }
 
    var outerRaw []byte
-   for _, recType := range l.outerOrder {
+   for _, recType := range l.OuterOrder {
       var valBytes []byte
       switch xmrType(recType) {
       case keyMaterialContainerEntryType:
@@ -82,9 +82,9 @@ func (l *License) encode() []byte {
       case signatureEntryType:
          valBytes = l.Signature.encode()
       default:
-         valBytes = l.outerUnknown[recType]
+         valBytes = l.OuterUnknown[recType]
       }
-      flags := l.outerFlags[recType]
+      flags := l.OuterFlags[recType]
       f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
       outerRaw = append(outerRaw, f.encode()...)
    }
@@ -94,7 +94,7 @@ func (l *License) encode() []byte {
    data = binary.BigEndian.AppendUint16(data, l.Version)
    data = append(data, l.RightsID[:]...)
 
-   f := ftlv{Flags: l.outerContainerFlags, Type: uint16(outerContainerEntryType), Length: uint32(len(outerRaw) + 8), Value: outerRaw}
+   f := ftlv{Flags: l.OuterContainerFlags, Type: uint16(outerContainerEntryType), Length: uint32(len(outerRaw) + 8), Value: outerRaw}
    return append(data, f.encode()...)
 }
 
@@ -109,23 +109,23 @@ func (l *License) decode(data []byte) error {
    data = data[copied:]
 
    outerContainer, _ := decodeFtlv(data)
-   l.outerContainerFlags = outerContainer.Flags
+   l.OuterContainerFlags = outerContainer.Flags
 
-   l.outerOrder = nil
-   l.outerUnknown = make(map[uint16][]byte)
-   l.outerFlags = make(map[uint16]uint16)
+   l.OuterOrder = nil
+   l.OuterUnknown = make(map[uint16][]byte)
+   l.OuterFlags = make(map[uint16]uint16)
 
-   l.keyMaterialOrder = nil
-   l.keyMaterialUnknown = make(map[uint16][]byte)
-   l.keyMaterialFlags = make(map[uint16]uint16)
+   l.KeyMaterialOrder = nil
+   l.KeyMaterialUnknown = make(map[uint16][]byte)
+   l.KeyMaterialFlags = make(map[uint16]uint16)
 
    var outerOffset int
    for outerOffset < len(outerContainer.Value) {
       outerValue, outerN := decodeFtlv(outerContainer.Value[outerOffset:])
       outerOffset += outerN
 
-      l.outerOrder = append(l.outerOrder, outerValue.Type)
-      l.outerFlags[outerValue.Type] = outerValue.Flags
+      l.OuterOrder = append(l.OuterOrder, outerValue.Type)
+      l.OuterFlags[outerValue.Type] = outerValue.Flags
 
       switch xmrType(outerValue.Type) {
       case keyMaterialContainerEntryType: // 9
@@ -134,8 +134,8 @@ func (l *License) decode(data []byte) error {
             innerValue, innerN := decodeFtlv(outerValue.Value[innerOffset:])
             innerOffset += innerN
 
-            l.keyMaterialOrder = append(l.keyMaterialOrder, innerValue.Type)
-            l.keyMaterialFlags[innerValue.Type] = innerValue.Flags
+            l.KeyMaterialOrder = append(l.KeyMaterialOrder, innerValue.Type)
+            l.KeyMaterialFlags[innerValue.Type] = innerValue.Flags
 
             switch xmrType(innerValue.Type) {
             case contentKeyEntryType: // 10
@@ -145,13 +145,13 @@ func (l *License) decode(data []byte) error {
             case auxKeyEntryType: // 81
                l.AuxKeyObject = decodeAuxKeys(innerValue.Value)
             default:
-               l.keyMaterialUnknown[innerValue.Type] = innerValue.Value
+               l.KeyMaterialUnknown[innerValue.Type] = innerValue.Value
             }
          }
       case signatureEntryType: // 11
          l.Signature = decodeSignature(outerValue.Value)
       default:
-         l.outerUnknown[outerValue.Type] = outerValue.Value
+         l.OuterUnknown[outerValue.Type] = outerValue.Value
       }
    }
    return nil

@@ -9,7 +9,6 @@ import (
    "encoding/hex"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
-   "slices"
 )
 
 func aesEcbEncrypt(data, key []byte) ([]byte, error) {
@@ -68,24 +67,19 @@ func elGamalEncrypt(data, pubKey *ecdsa.PublicKey) ([]byte, error) {
 
    c2 := nistec.NewP256Point().Add(dataPoint, sharedSec)
 
-   return slices.Concat(c1.Bytes()[1:], c2.Bytes()[1:]), nil
+   return append(c1.Bytes()[1:], c2.Bytes()[1:]...), nil
 }
 
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
 
 func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
-   pubData, err := hex.DecodeString(wmrmPublicKey)
-   if err != nil {
-      return nil, err
-   }
    uncompressed := [65]byte{4}
-   copy(uncompressed[1:], pubData)
-
-   pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed[:])
+   _, err := hex.Decode(uncompressed[1:], []byte(wmrmPublicKey))
    if err != nil {
       return nil, err
    }
-   return pub, nil
+
+   return ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed[:])
 }
 
 func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error) {
@@ -126,7 +120,7 @@ type EcdsaSignature struct {
    IssuerKey       []byte // The public key of the issuer that signed this
 }
 
-func (s *EcdsaSignature) New(signatureData, signingKey []byte) {
+func (s *EcdsaSignature) initialize(signatureData, signingKey []byte) {
    s.SignatureType = 1
    s.SignatureLength = uint16(len(signatureData))
    s.SignatureData = signatureData
