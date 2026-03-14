@@ -106,5 +106,5 @@ type client struct {
    // 1
    certificate string
    // 2
-   key               string
+   key string
 }
