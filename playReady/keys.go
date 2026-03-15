@@ -5,34 +5,10 @@ import (
    "crypto/ecdh"
    "crypto/ecdsa"
    "crypto/elliptic"
-   "encoding/binary"
    "encoding/hex"
    "errors"
    "log"
 )
-
-type EccKey struct {
-   Curve  uint16
-   Length uint16
-   Value  []byte
-}
-
-func (e *EccKey) encode() []byte {
-   data := binary.BigEndian.AppendUint16(nil, e.Curve)
-   data = binary.BigEndian.AppendUint16(data, e.Length)
-   return append(data, e.Value...)
-}
-
-// decodeEccKey decodes a byte slice into an ECCKey structure.
-func decodeEccKey(data []byte) *EccKey {
-   e := &EccKey{}
-   e.Curve = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   e.Length = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   e.Value = data
-   return e
-}
 
 type xmlKey struct {
    PublicKey *ecdsa.PublicKey
@@ -66,53 +42,27 @@ func (x *xmlKey) aesKey() []byte {
 
 const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
 
-type ContentKey struct {
-   KeyID      [16]byte
-   KeyType    uint16
-   CipherType uint16
-   Length     uint16
-   Value      []byte
-}
-
-func (c *ContentKey) encode() []byte {
-   data := append([]byte(nil), c.KeyID[:]...)
-   data = binary.BigEndian.AppendUint16(data, c.KeyType)
-   data = binary.BigEndian.AppendUint16(data, c.CipherType)
-   data = binary.BigEndian.AppendUint16(data, c.Length)
-   return append(data, c.Value...)
-}
-
-// decodeContentKey decodes a byte slice into a new ContentKey structure.
-func decodeContentKey(data []byte) *ContentKey {
-   c := &ContentKey{}
-   copied := copy(c.KeyID[:], data)
-   data = data[copied:]
-   c.KeyType = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.CipherType = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.Length = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   c.Value = data
-   return c
-}
-
-// decrypt returns the raw decrypted payload.
-func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, auxKeys *AuxKeys) ([]byte, error) {
-   log.Println("PlayReady cipher type", c.CipherType)
-   switch c.CipherType {
+// decrypt returns the raw decrypted payload, acting on the ContentKey defined in drm_xmr.go.
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, aux *AuxKey) ([]byte, error) {
+   log.Println("PlayReady cipher type", c.KeyEncryptionCipherType)
+   switch c.KeyEncryptionCipherType {
    case 3:
-      return elGamalDecrypt(c.Value, privKey)
-   case 6:
-      return c.scalable(privKey, auxKeys)
+      return elGamalDecrypt(c.EncryptedKeyBuffer, privKey)
+   case 6: // scalable
+      return c.scalable(privKey, aux)
    }
    return nil, errors.New("cannot decrypt key")
 }
 
-func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *AuxKeys) ([]byte, error) {
-   rootKeyInfo := c.Value[:144]
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *AuxKey) ([]byte, error) {
+   if len(c.EncryptedKeyBuffer) < 144 || !aux.Valid || aux.Entries == 0 {
+      return nil, errors.New("invalid scalable key data or missing aux keys")
+   }
+
+   rootKeyInfo := c.EncryptedKeyBuffer[:144]
    rootKey := rootKeyInfo[128:]
-   leafKeys := c.Value[144:]
+   leafKeys := c.EncryptedKeyBuffer[144:]
+
    decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
    if err != nil {
       return nil, err
@@ -136,7 +86,8 @@ func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *AuxKeys) ([]byte, 
    if err != nil {
       return nil, err
    }
-   auxKeyCalc, err := aesEcbEncrypt(aux.Keys[0].Key[:], contentKeyPrime)
+   // Access key map updated to use the layout introduced in drm_xmr.go
+   auxKeyCalc, err := aesEcbEncrypt(aux.EntriesList[0].Key[:], contentKeyPrime)
    if err != nil {
       return nil, err
    }

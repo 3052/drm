@@ -10,57 +10,6 @@ import (
    "testing"
 )
 
-func TestChain(t *testing.T) {
-   data, err := os.ReadFile(paths.groupCert)
-   if err != nil {
-      t.Fatal(err)
-   }
-   certificate, err := ParseChain(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = os.ReadFile(paths.zPriv)
-   if err != nil {
-      t.Fatal(err)
-   }
-   modelKey, err := ParseRawPrivateKey(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   signingKey, err := GenerateKey()
-   if err != nil {
-      t.Fatal(err)
-   }
-   encryptKey, err := GenerateKey()
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = certificate.GenerateLeaf(modelKey, signingKey, encryptKey)
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(paths.devCert, certificate.Bytes())
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = PrivateKeyBytes(encryptKey)
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(paths.zPrivEncr, data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = PrivateKeyBytes(signingKey)
-   if err != nil {
-      t.Fatal(err)
-   }
-   err = write_file(paths.zPrivSig, data)
-   if err != nil {
-      t.Fatal(err)
-   }
-}
-
 func TestKey(t *testing.T) {
    data, err := os.ReadFile(paths.devCert)
    if err != nil {
@@ -116,8 +65,13 @@ func TestKey(t *testing.T) {
       if err != nil {
          t.Fatal(err)
       }
-      UuidOrGuid(licenseData.ContentKey.KeyID[:])
-      if hex.EncodeToString(licenseData.ContentKey.KeyID[:]) != test.kid_wv {
+      UuidOrGuid(
+         licenseData.ContainerOuter.ContainerKeys.ContentKey.GuidKeyID,
+      )
+      key_id := hex.EncodeToString(
+         licenseData.ContainerOuter.ContainerKeys.ContentKey.GuidKeyID,
+      )
+      if key_id != test.kid_wv {
          t.Fatal(".KeyID")
       }
       if hex.EncodeToString(key) != test.key {
@@ -168,4 +122,55 @@ var paths = struct {
    devCert:   baseDir + "/bdevcert.dat",
    zPrivEncr: baseDir + "/zprivencr.dat",
    zPrivSig:  baseDir + "/zprivsig.dat",
+}
+
+func TestChain(t *testing.T) {
+   data, err := os.ReadFile(paths.groupCert)
+   if err != nil {
+      t.Fatal(err)
+   }
+   certificate, err := ParseChain(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = os.ReadFile(paths.zPriv)
+   if err != nil {
+      t.Fatal(err)
+   }
+   modelKey, err := ParseRawPrivateKey(data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   signingKey, err := GenerateKey()
+   if err != nil {
+      t.Fatal(err)
+   }
+   encryptKey, err := GenerateKey()
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = certificate.GenerateLeaf(modelKey, signingKey, encryptKey)
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(paths.devCert, certificate.Bytes())
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = PrivateKeyBytes(encryptKey)
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(paths.zPrivEncr, data)
+   if err != nil {
+      t.Fatal(err)
+   }
+   data, err = PrivateKeyBytes(signingKey)
+   if err != nil {
+      t.Fatal(err)
+   }
+   err = write_file(paths.zPrivSig, data)
+   if err != nil {
+      t.Fatal(err)
+   }
 }

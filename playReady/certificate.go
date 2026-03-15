@@ -11,14 +11,14 @@ import (
    "math/big"
 )
 
-func decodePaddedString(data []byte) (string, int) {
+func decodePaddedString(data []byte) (PaddedString, int) {
    length := binary.BigEndian.Uint32(data)
    paddedLength := (length + 3) &^ 3
    val := string(data[4 : 4+length])
-   return val, int(4 + paddedLength)
+   return PaddedString(val), int(4 + paddedLength)
 }
 
-func encodePaddedString(val string) []byte {
+func encodePaddedString(val PaddedString) []byte {
    length := uint32(len(val))
    paddedLength := (length + 3) &^ 3
    data := make([]byte, int(4+paddedLength))
@@ -127,18 +127,15 @@ func (c *Certificate) decode(data []byte) (int, error) {
 
          off := 4
          manStr, manLen := decodePaddedString(valBytes[off:])
-         c.ManufacturerInfo.ManufacturerStrings.ManufacturerName.Cb = uint32(len(manStr))
-         c.ManufacturerInfo.ManufacturerStrings.ManufacturerName.Rgb = []byte(manStr)
+         c.ManufacturerInfo.ManufacturerStrings.ManufacturerName = manStr
          off += manLen
 
          modStr, modLen := decodePaddedString(valBytes[off:])
-         c.ManufacturerInfo.ManufacturerStrings.ModelName.Cb = uint32(len(modStr))
-         c.ManufacturerInfo.ManufacturerStrings.ModelName.Rgb = []byte(modStr)
+         c.ManufacturerInfo.ManufacturerStrings.ModelName = modStr
          off += modLen
 
          numStr, _ := decodePaddedString(valBytes[off:])
-         c.ManufacturerInfo.ManufacturerStrings.ModelNumber.Cb = uint32(len(numStr))
-         c.ManufacturerInfo.ManufacturerStrings.ModelNumber.Rgb = []byte(numStr)
+         c.ManufacturerInfo.ManufacturerStrings.ModelNumber = numStr
 
       case ObjTypeSignature:
          c.SignatureInfo = &SignatureInfo{Header: headerData}
@@ -242,9 +239,9 @@ func (c *Certificate) encode() []byte {
          if c.ManufacturerInfo != nil {
             flags = c.ManufacturerInfo.Header.Flags
             valBytes = binary.BigEndian.AppendUint32(nil, c.ManufacturerInfo.Flags)
-            valBytes = append(valBytes, encodePaddedString(string(c.ManufacturerInfo.ManufacturerStrings.ManufacturerName.Rgb))...)
-            valBytes = append(valBytes, encodePaddedString(string(c.ManufacturerInfo.ManufacturerStrings.ModelName.Rgb))...)
-            valBytes = append(valBytes, encodePaddedString(string(c.ManufacturerInfo.ManufacturerStrings.ModelNumber.Rgb))...)
+            valBytes = append(valBytes, encodePaddedString(c.ManufacturerInfo.ManufacturerStrings.ManufacturerName)...)
+            valBytes = append(valBytes, encodePaddedString(c.ManufacturerInfo.ManufacturerStrings.ModelName)...)
+            valBytes = append(valBytes, encodePaddedString(c.ManufacturerInfo.ManufacturerStrings.ModelNumber)...)
          }
       case ObjTypeSignature:
          if c.SignatureInfo != nil {

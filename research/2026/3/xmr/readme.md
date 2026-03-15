@@ -20,6 +20,11 @@ https://learn.microsoft.com/playready/advanced/testservers/testing-client-info
 
 <https://learn.microsoft.com/openspecs/windows_protocols/ms-drmnd/cb98ce44-1aef-4116-9115-a10dee37988b>
 
-## drmbcertconstants
+## Playready2.0
 
-https://github.com/BPI-SINOVOIP/BPI-1296-Android7/blob/master/android/device/realtek/proprietary/libs/libRTKExtractor/RTKExtractor/Filters/NavigationFilter/InputASF/Playready2.0/source/certs/drmbcert.h
+~~~
+source/certs/drmbcert.h
+source/xmr/drmxmr.h
+~~~
+
+https://github.com/BPI-SINOVOIP/BPI-1296-Android7/tree/master/android/device/realtek/proprietary/libs/libRTKExtractor/RTKExtractor/Filters/NavigationFilter/InputASF/Playready2.0

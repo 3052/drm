@@ -2,18 +2,19 @@
 package playReady
 
 import (
-   "41.neocities.org/drm/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/ecdsa"
    "encoding/binary"
    "errors"
+
+   "41.neocities.org/drm/playReady/xml"
    "github.com/emmansun/gmsm/cbcmac"
 )
 
 // ParseLicense processes XML license data and returns the parsed License object.
 func ParseLicense(data []byte) (*License, error) {
-   l := &License{} // single letter 'l' allowed because it is the return variable
+   l := &License{} // Using License type from drm_xmr.go
    var envelope xml.EnvelopeResponse
    err := xml.Unmarshal(data, &envelope)
    if err != nil {
@@ -22,179 +23,132 @@ func ParseLicense(data []byte) (*License, error) {
    if envelope.Body.Fault != nil {
       return nil, errors.New(envelope.Body.Fault.Fault)
    }
-   err = l.decode(envelope.
-      Body.
-      AcquireLicenseResponse.
-      AcquireLicenseResult.
-      Response.
-      LicenseResponse.
-      Licenses.
-      License,
-   )
+
+   rawXmr := envelope.Body.AcquireLicenseResponse.AcquireLicenseResult.Response.LicenseResponse.Licenses.License
+   err = l.decode(rawXmr)
    if err != nil {
       return nil, err
    }
    return l, nil
 }
 
-func (l *License) verify(contentIntegrity []byte) error {
-   data := l.encode()
-
-   // The MAC is calculated over the entire license EXCEPT the Signature FTLV.
-   // The Signature FTLV is strictly the last object in the Outer Container.
-   // FTLV header (8 bytes) + Signature header (4 bytes) + Signature Data
-   sigLen := 8 + 4 + len(l.Signature.Data)
-   data = data[:len(data)-sigLen]
-
-   block, err := aes.NewCipher(contentIntegrity)
-   if err != nil {
-      return err
+func (l *License) decode(data []byte) error {
+   if len(data) < HeaderLength {
+      return errors.New("license data too short")
    }
-   data = cbcmac.NewCMAC(block, aes.BlockSize).MAC(data)
-   if !bytes.Equal(data, l.Signature.Data) {
-      return errors.New("failed to decrypt the keys")
+
+   // Keep full raw XMR for verifying signature locally without rebuilding
+   l.XMRLic = data
+   l.CBXMRLic = uint32(len(data))
+
+   magic := binary.BigEndian.Uint32(data[0:4])
+   if magic != MagicConstant {
+      if string(data[:3]) != "XMR" {
+         return errors.New("invalid XMR magic keyword")
+      }
    }
+
+   l.Version = uint32(binary.BigEndian.Uint16(data[6:8]))
+
+   l.RightsIdBuffer = make([]byte, 16)
+   copy(l.RightsIdBuffer, data[8:24])
+   l.IRightsId = 8
+
+   // XMR OuterContainer typically begins right after the header, offset by word at 4
+   offset := int(binary.BigEndian.Uint16(data[4:6]))
+   if offset == 0 || offset < 24 {
+      offset = 24
+   }
+
+   for offset < len(data) {
+      f, n := decodeFtlv(data[offset:])
+      // Use the ObjectType enum natively defined in drm_xmr.go!
+      if ObjectType(f.Type) == ObjectTypeOuterContainer {
+         l.ContainerOuter.Valid = true
+         l.parseOuterContainer(f.Value)
+      }
+      offset += n
+   }
+
    return nil
 }
 
-// License represents a parsed PlayReady license.
-type License struct {
-   Magic    [4]byte
-   Offset   uint16
-   Version  uint16
-   RightsID [16]byte
-
-   ContentKey   *ContentKey
-   EccKey       *EccKey
-   Signature    *Signature
-   AuxKeyObject *AuxKeys
-
-   // Container dynamics matching the certificate pattern
-   OuterContainerFlags uint16
-   OuterOrder          []uint16
-   OuterUnknown        map[uint16][]byte
-   OuterFlags          map[uint16]uint16
-
-   KeyMaterialOrder   []uint16
-   KeyMaterialUnknown map[uint16][]byte
-   KeyMaterialFlags   map[uint16]uint16
+func (l *License) parseOuterContainer(data []byte) {
+   offset := 0
+   for offset < len(data) {
+      f, n := decodeFtlv(data[offset:])
+      switch ObjectType(f.Type) {
+      case ObjectTypeKeyMaterialContainer:
+         l.ContainerOuter.ContainerKeys.Valid = true
+         l.parseKeyMaterialContainer(f.Value)
+      case ObjectTypeSignatureObject:
+         l.ContainerOuter.Signature.Valid = true
+         l.ContainerOuter.Signature.Type = binary.BigEndian.Uint16(f.Value[0:2])
+         l.ContainerOuter.Signature.CBSignature = binary.BigEndian.Uint16(f.Value[2:4])
+         l.ContainerOuter.Signature.SignatureBuffer = f.Value[4:]
+      }
+      offset += n
+   }
 }
 
-func (l *License) encode() []byte {
-   var keyMaterialRaw []byte
-   for _, recType := range l.KeyMaterialOrder {
-      var valBytes []byte
-      switch xmrType(recType) {
-      case contentKeyEntryType:
-         valBytes = l.ContentKey.encode()
-      case deviceKeyEntryType:
-         valBytes = l.EccKey.encode()
-      case auxKeyEntryType:
-         valBytes = l.AuxKeyObject.encode()
-      default:
-         valBytes = l.KeyMaterialUnknown[recType]
-      }
-      flags := l.KeyMaterialFlags[recType]
-      f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
-      keyMaterialRaw = append(keyMaterialRaw, f.encode()...)
-   }
-
-   var outerRaw []byte
-   for _, recType := range l.OuterOrder {
-      var valBytes []byte
-      switch xmrType(recType) {
-      case keyMaterialContainerEntryType:
-         valBytes = keyMaterialRaw
-      case signatureEntryType:
-         valBytes = l.Signature.encode()
-      default:
-         valBytes = l.OuterUnknown[recType]
-      }
-      flags := l.OuterFlags[recType]
-      f := ftlv{Flags: flags, Type: recType, Length: uint32(len(valBytes) + 8), Value: valBytes}
-      outerRaw = append(outerRaw, f.encode()...)
-   }
-
-   data := l.Magic[:]
-   data = binary.BigEndian.AppendUint16(data, l.Offset)
-   data = binary.BigEndian.AppendUint16(data, l.Version)
-   data = append(data, l.RightsID[:]...)
-
-   f := ftlv{Flags: l.OuterContainerFlags, Type: uint16(outerContainerEntryType), Length: uint32(len(outerRaw) + 8), Value: outerRaw}
-   return append(data, f.encode()...)
-}
-
-func (l *License) decode(data []byte) error {
-   copied := copy(l.Magic[:], data)
-   data = data[copied:]
-   l.Offset = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   l.Version = binary.BigEndian.Uint16(data)
-   data = data[2:]
-   copied = copy(l.RightsID[:], data)
-   data = data[copied:]
-
-   outerContainer, _ := decodeFtlv(data)
-   l.OuterContainerFlags = outerContainer.Flags
-
-   l.OuterOrder = nil
-   l.OuterUnknown = make(map[uint16][]byte)
-   l.OuterFlags = make(map[uint16]uint16)
-
-   l.KeyMaterialOrder = nil
-   l.KeyMaterialUnknown = make(map[uint16][]byte)
-   l.KeyMaterialFlags = make(map[uint16]uint16)
-
-   var outerOffset int
-   for outerOffset < len(outerContainer.Value) {
-      outerValue, outerN := decodeFtlv(outerContainer.Value[outerOffset:])
-      outerOffset += outerN
-
-      l.OuterOrder = append(l.OuterOrder, outerValue.Type)
-      l.OuterFlags[outerValue.Type] = outerValue.Flags
-
-      switch xmrType(outerValue.Type) {
-      case keyMaterialContainerEntryType: // 9
-         var innerOffset int
-         for innerOffset < len(outerValue.Value) {
-            innerValue, innerN := decodeFtlv(outerValue.Value[innerOffset:])
-            innerOffset += innerN
-
-            l.KeyMaterialOrder = append(l.KeyMaterialOrder, innerValue.Type)
-            l.KeyMaterialFlags[innerValue.Type] = innerValue.Flags
-
-            switch xmrType(innerValue.Type) {
-            case contentKeyEntryType: // 10
-               l.ContentKey = decodeContentKey(innerValue.Value)
-            case deviceKeyEntryType: // 42
-               l.EccKey = decodeEccKey(innerValue.Value)
-            case auxKeyEntryType: // 81
-               l.AuxKeyObject = decodeAuxKeys(innerValue.Value)
-            default:
-               l.KeyMaterialUnknown[innerValue.Type] = innerValue.Value
+func (l *License) parseKeyMaterialContainer(data []byte) {
+   offset := 0
+   for offset < len(data) {
+      f, n := decodeFtlv(data[offset:])
+      switch ObjectType(f.Type) {
+      case ObjectTypeContentKeyObject:
+         ck := &l.ContainerOuter.ContainerKeys.ContentKey
+         ck.Valid = true
+         ck.GuidKeyID = f.Value[0:16]
+         ck.SymmetricCipherType = binary.BigEndian.Uint16(f.Value[16:18])
+         ck.KeyEncryptionCipherType = binary.BigEndian.Uint16(f.Value[18:20])
+         ck.CBEncryptedKey = binary.BigEndian.Uint16(f.Value[20:22])
+         ck.EncryptedKeyBuffer = f.Value[22:]
+      case ObjectTypeEccDeviceKeyObject: // Replaces old `deviceKeyEntryType` (42 / 0x2A)
+         ek := &l.ContainerOuter.ContainerKeys.ECCKey
+         ek.Valid = true
+         ek.EccCurveType = binary.BigEndian.Uint16(f.Value[0:2])
+         ek.CBKeyData = binary.BigEndian.Uint16(f.Value[2:4])
+         ek.KeyData = f.Value[4:]
+      case ObjectTypeAuxKeyObject:
+         ak := &l.ContainerOuter.ContainerKeys.AuxKey
+         ak.Valid = true
+         ak.Entries = binary.BigEndian.Uint16(f.Value[0:2])
+         if ak.Entries > 0 {
+            ak.EntriesList = make([]AuxKeyEntry, ak.Entries)
+            vOff := 2
+            for i := 0; i < int(ak.Entries); i++ {
+               ak.EntriesList[i].Location = binary.BigEndian.Uint32(f.Value[vOff : vOff+4])
+               copy(ak.EntriesList[i].Key[:], f.Value[vOff+4:vOff+20])
+               vOff += 20
             }
          }
-      case signatureEntryType: // 11
-         l.Signature = decodeSignature(outerValue.Value)
-      default:
-         l.OuterUnknown[outerValue.Type] = outerValue.Value
       }
+      offset += n
    }
-   return nil
 }
 
-// Decrypt validates the license for the given device key, verifies its signature,
-// and returns the decrypted content key bytes.
 func (l *License) Decrypt(encryptKey *ecdsa.PrivateKey) ([]byte, error) {
    pubBytes, err := publicKeyBytes(encryptKey)
    if err != nil {
       return nil, err
    }
-   if !bytes.Equal(l.EccKey.Value, pubBytes) {
+
+   if !l.ContainerOuter.ContainerKeys.ECCKey.Valid {
+      return nil, errors.New("no device key found in license")
+   }
+   if !bytes.Equal(l.ContainerOuter.ContainerKeys.ECCKey.KeyData, pubBytes) {
       return nil, errors.New("license response is not for this device")
    }
 
-   decryptedKey, err := l.ContentKey.decrypt(encryptKey, l.AuxKeyObject)
+   ck := &l.ContainerOuter.ContainerKeys.ContentKey
+   aux := &l.ContainerOuter.ContainerKeys.AuxKey
+
+   if !ck.Valid {
+      return nil, errors.New("no content key object found")
+   }
+
+   decryptedKey, err := ck.decrypt(encryptKey, aux)
    if err != nil {
       return nil, err
    }
@@ -203,12 +157,36 @@ func (l *License) Decrypt(encryptKey *ecdsa.PrivateKey) ([]byte, error) {
       return nil, errors.New("invalid key length")
    }
 
-   // Verify signature using the integrity block (first 16 bytes)
    err = l.verify(decryptedKey[:16])
    if err != nil {
       return nil, err
    }
 
-   // Return only the user content key slice directly
    return decryptedKey[16:32], nil
+}
+
+func (l *License) verify(contentIntegrity []byte) error {
+   if !l.ContainerOuter.Signature.Valid {
+      return errors.New("signature missing")
+   }
+
+   // FTLV Header (8) + Sig Header (4: Type + Length) + Signature Bytes
+   sigLen := 12 + int(l.ContainerOuter.Signature.CBSignature)
+
+   if len(l.XMRLic) < sigLen {
+      return errors.New("license data is shorter than signature")
+   }
+
+   data := l.XMRLic[:len(l.XMRLic)-sigLen]
+
+   block, err := aes.NewCipher(contentIntegrity)
+   if err != nil {
+      return err
+   }
+
+   data = cbcmac.NewCMAC(block, aes.BlockSize).MAC(data)
+   if !bytes.Equal(data, l.ContainerOuter.Signature.SignatureBuffer) {
+      return errors.New("failed to decrypt the keys - mac signature check failed")
+   }
+   return nil
 }
