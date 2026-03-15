@@ -6,7 +6,9 @@ import (
    "crypto/aes"
    "crypto/ecdsa"
    "encoding/binary"
+   "encoding/hex"
    "errors"
+   "log"
 
    "41.neocities.org/drm/playReady/xml"
    "github.com/emmansun/gmsm/cbcmac"
@@ -14,7 +16,7 @@ import (
 
 // ParseLicense processes XML license data and returns the parsed License object.
 func ParseLicense(data []byte) (*License, error) {
-   l := &License{} // Using License type from drm_xmr.go
+   l := &License{}
    var envelope xml.EnvelopeResponse
    err := xml.Unmarshal(data, &envelope)
    if err != nil {
@@ -62,7 +64,6 @@ func (l *License) decode(data []byte) error {
 
    for offset < len(data) {
       f, n := decodeFtlv(data[offset:])
-      // Use the ObjectType enum natively defined in drm_xmr.go!
       if ObjectType(f.Type) == ObjectTypeOuterContainer {
          l.ContainerOuter.Valid = true
          l.parseOuterContainer(f.Value)
@@ -104,7 +105,7 @@ func (l *License) parseKeyMaterialContainer(data []byte) {
          ck.KeyEncryptionCipherType = binary.BigEndian.Uint16(f.Value[18:20])
          ck.CBEncryptedKey = binary.BigEndian.Uint16(f.Value[20:22])
          ck.EncryptedKeyBuffer = f.Value[22:]
-      case ObjectTypeEccDeviceKeyObject: // Replaces old `deviceKeyEntryType` (42 / 0x2A)
+      case ObjectTypeEccDeviceKeyObject:
          ek := &l.ContainerOuter.ContainerKeys.ECCKey
          ek.Valid = true
          ek.EccCurveType = binary.BigEndian.Uint16(f.Value[0:2])
@@ -126,6 +127,66 @@ func (l *License) parseKeyMaterialContainer(data []byte) {
       }
       offset += n
    }
+}
+
+func (c *ContentKey) decrypt(privKey *ecdsa.PrivateKey, aux *AuxKey) ([]byte, error) {
+   switch AsymmetricEncryptionType(c.KeyEncryptionCipherType) {
+   case AsymmetricEncryptionTypeECC256:
+      log.Print("AsymmetricEncryptionTypeECC256")
+      return elGamalDecrypt(c.EncryptedKeyBuffer, privKey)
+   case AsymmetricEncryptionTypeECC256ViaSymmetric: // scalable
+      log.Print("AsymmetricEncryptionTypeECC256ViaSymmetric")
+      return c.scalable(privKey, aux)
+   }
+   return nil, errors.New("cannot decrypt key")
+}
+
+func (c *ContentKey) scalable(privKey *ecdsa.PrivateKey, aux *AuxKey) ([]byte, error) {
+   if len(c.EncryptedKeyBuffer) < 144 || !aux.Valid || aux.Entries == 0 {
+      return nil, errors.New("invalid scalable key data or missing aux keys")
+   }
+
+   rootKeyInfo := c.EncryptedKeyBuffer[:144]
+   rootKey := rootKeyInfo[128:]
+   leafKeys := c.EncryptedKeyBuffer[144:]
+
+   decrypted, err := elGamalDecrypt(rootKeyInfo[:128], privKey)
+   if err != nil {
+      return nil, err
+   }
+   var (
+      ci [16]byte
+      ck [16]byte
+   )
+   for index := range 16 {
+      ci[index] = decrypted[index*2]
+      ck[index] = decrypted[index*2+1]
+   }
+
+   magicZero, err := hex.DecodeString(magicConstantZero)
+   if err != nil {
+      return nil, err
+   }
+
+   rgbUplinkXkey := xorKey(ck[:], magicZero)
+   contentKeyPrime, err := aesEcbEncrypt(rgbUplinkXkey, ck[:])
+   if err != nil {
+      return nil, err
+   }
+
+   auxKeyCalc, err := aesEcbEncrypt(aux.EntriesList[0].Key[:], contentKeyPrime)
+   if err != nil {
+      return nil, err
+   }
+   oSecondaryKey, err := aesEcbEncrypt(rootKey, ck[:])
+   if err != nil {
+      return nil, err
+   }
+   rgbKey, err := aesEcbEncrypt(leafKeys, auxKeyCalc)
+   if err != nil {
+      return nil, err
+   }
+   return aesEcbEncrypt(rgbKey, oSecondaryKey)
 }
 
 func (l *License) Decrypt(encryptKey *ecdsa.PrivateKey) ([]byte, error) {

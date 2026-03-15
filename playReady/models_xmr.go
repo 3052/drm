@@ -1,5 +1,18 @@
-// drm_xmr.go
+// models_xmr.go
 package playReady
+
+// AsymmetricEncryptionType is used for encrypting the content key
+type AsymmetricEncryptionType uint16
+
+const (
+   AsymmetricEncryptionTypeInvalid            AsymmetricEncryptionType = 0x0000
+   AsymmetricEncryptionTypeRSA1024            AsymmetricEncryptionType = 0x0001
+   AsymmetricEncryptionTypeChainedLicense     AsymmetricEncryptionType = 0x0002
+   AsymmetricEncryptionTypeECC256             AsymmetricEncryptionType = 0x0003
+   AsymmetricEncryptionTypeECC256WithKZ       AsymmetricEncryptionType = 0x0004
+   AsymmetricEncryptionTypeTEETransient       AsymmetricEncryptionType = 0x0005
+   AsymmetricEncryptionTypeECC256ViaSymmetric AsymmetricEncryptionType = 0x0006
+)
 
 const (
    HeaderLength  = (4 * 2) + 16 // Assuming SIZEOF(DRM_ID) == 16
