@@ -1,4 +1,3 @@
-// certificate.go
 package playReady
 
 import (
@@ -10,6 +9,44 @@ import (
    "errors"
    "math/big"
 )
+
+// Manufacturer represents manufacturer details.
+type Manufacturer struct {
+   Flags            uint32
+   ManufacturerName string
+   ModelName        string
+   ModelNumber      string
+}
+
+type CertificateInfo struct {
+   CertificateId [16]byte
+   SecurityLevel uint32
+   Flags         uint32
+   InfoType      uint32
+   Digest        [32]byte
+   Expiry        uint32
+   ClientId      [16]byte
+}
+
+// decodeCertificateInfo decodes a byte slice into a new CertificateInfo
+// structure
+func decodeCertificateInfo(data []byte) *CertificateInfo {
+   c := &CertificateInfo{}
+   n := copy(c.CertificateId[:], data)
+   data = data[n:]
+   c.SecurityLevel = binary.BigEndian.Uint32(data)
+   data = data[4:]
+   c.Flags = binary.BigEndian.Uint32(data)
+   data = data[4:]
+   c.InfoType = binary.BigEndian.Uint32(data)
+   data = data[4:]
+   n = copy(c.Digest[:], data)
+   data = data[n:]
+   c.Expiry = binary.BigEndian.Uint32(data)
+   data = data[4:]
+   copy(c.ClientId[:], data)
+   return c
+}
 
 type Certificate struct {
    Magic            [4]byte
@@ -205,16 +242,6 @@ func (c *Certificate) encode() []byte {
    return data
 }
 
-type CertificateInfo struct {
-   CertificateId [16]byte
-   SecurityLevel uint32
-   Flags         uint32
-   InfoType      uint32
-   Digest        [32]byte
-   Expiry        uint32
-   ClientId      [16]byte
-}
-
 func (c *CertificateInfo) encode() []byte {
    data := make([]byte, 0, 80)
    data = append(data, c.CertificateId[:]...)
@@ -231,33 +258,6 @@ func (c *CertificateInfo) initialize(securityLevel uint32, digest []byte) {
    c.InfoType = 2
    copy(c.Digest[:], digest)
    c.Expiry = 4294967295
-}
-
-// decodeCertificateInfo decodes a byte slice into a new CertificateInfo structure.
-func decodeCertificateInfo(data []byte) *CertificateInfo {
-   c := &CertificateInfo{}
-   n := copy(c.CertificateId[:], data)
-   data = data[n:]
-   c.SecurityLevel = binary.BigEndian.Uint32(data)
-   data = data[4:]
-   c.Flags = binary.BigEndian.Uint32(data)
-   data = data[4:]
-   c.InfoType = binary.BigEndian.Uint32(data)
-   data = data[4:]
-   n = copy(c.Digest[:], data)
-   data = data[n:]
-   c.Expiry = binary.BigEndian.Uint32(data)
-   data = data[4:]
-   copy(c.ClientId[:], data)
-   return c
-}
-
-// Manufacturer represents manufacturer details.
-type Manufacturer struct {
-   Flags            uint32
-   ManufacturerName string
-   ModelName        string
-   ModelNumber      string
 }
 
 // encode encodes the manufacturer structure into a byte slice.

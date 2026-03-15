@@ -3,6 +3,8 @@
 ~~~
 "extensible media rights" specification
 /extensible media rights/
+
+"digestvalue" "manufacturername" "modelname" "modelnumber"
 ~~~
 
 ## License and Policies
