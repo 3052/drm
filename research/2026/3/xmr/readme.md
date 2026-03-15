@@ -1,12 +1,5 @@
 # PlayReady DRM Extensible Media Rights (XMR) Specification
 
-~~~
-"extensible media rights" specification
-/extensible media rights/
-
-"digestvalue" "manufacturername" "modelname" "modelnumber"
-~~~
-
 ## License and Policies
 
 https://learn.microsoft.com/playready/overview/license-and-policies
@@ -26,3 +19,7 @@ https://learn.microsoft.com/playready/advanced/testservers/testing-client-info
 ## The License Response Message
 
 <https://learn.microsoft.com/openspecs/windows_protocols/ms-drmnd/cb98ce44-1aef-4116-9115-a10dee37988b>
+
+## drmbcertconstants
+
+https://github.com/BPI-SINOVOIP/BPI-1296-Android7/blob/master/android/device/realtek/proprietary/libs/libRTKExtractor/RTKExtractor/Filters/NavigationFilter/InputASF/Playready2.0/source/certs/drmbcert.h

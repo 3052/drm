@@ -125,6 +125,7 @@ func TestKey(t *testing.T) {
       }
    }
 }
+
 func write_file(name string, data []byte) error {
    log.Println("WriteFile", name)
    return os.WriteFile(name, data, os.ModePerm)
@@ -138,7 +139,7 @@ var key_tests = []struct {
    {
       key:    "00000000000000000000000000000000",
       kid_wv: "10000000000000000000000000000000",
-      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==",
+      url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==", // AES128BitCTR
    },
    {
       key:    "00000000000000000000000000000000",

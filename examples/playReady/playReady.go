@@ -96,7 +96,7 @@ func (c *client) do_certificate() error {
    if err != nil {
       return err
    }
-   for _, certificate := range chain.Certs {
+   for _, certificate := range chain.Certificates {
       fmt.Printf("%+v\n", certificate.ManufacturerInfo)
    }
    return nil

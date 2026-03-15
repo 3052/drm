@@ -105,53 +105,9 @@ type Device struct {
    MaxLicenseChainDepth uint32
 }
 
-func (d *Device) initialize() {
-   d.MaxLicenseSize = 10240
-   d.MaxHeaderSize = 15360
-   d.MaxLicenseChainDepth = 2
-}
-
-func (d *Device) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, d.MaxLicenseSize)
-   data = binary.BigEndian.AppendUint32(data, d.MaxHeaderSize)
-   return binary.BigEndian.AppendUint32(data, d.MaxLicenseChainDepth)
-}
-
-func decodeDevice(data []byte) *Device {
-   d := &Device{}
-   d.MaxLicenseSize = binary.BigEndian.Uint32(data)
-   d.MaxHeaderSize = binary.BigEndian.Uint32(data[4:])
-   d.MaxLicenseChainDepth = binary.BigEndian.Uint32(data[8:])
-   return d
-}
-
 type Features struct {
    Entries  uint32
    Features []uint32
-}
-
-func (f *Features) initialize(Type int) {
-   f.Entries = 1
-   f.Features = []uint32{uint32(Type)}
-}
-
-func (f *Features) encode() []byte {
-   data := binary.BigEndian.AppendUint32(nil, f.Entries)
-   for _, feature := range f.Features {
-      data = binary.BigEndian.AppendUint32(data, feature)
-   }
-   return data
-}
-
-func decodeFeatures(data []byte) (*Features, int) {
-   f := &Features{}
-   f.Entries = binary.BigEndian.Uint32(data)
-   n := 4
-   for range f.Entries {
-      f.Features = append(f.Features, binary.BigEndian.Uint32(data[n:]))
-      n += 4
-   }
-   return f, n
 }
 
 type ftlv struct {

@@ -12,8 +12,8 @@ import (
 var paths = struct {
    groupCert, zPriv, devCert, zPrivEncr, zPrivSig string
 }{
-   devCert:   "/SL2000/bdevcert.dat",
-   zPrivSig:  "/SL2000/zprivsig.dat",
+   devCert:  "/SL2000/bdevcert.dat",
+   zPrivSig: "/SL2000/zprivsig.dat",
 }
 
 func main() {
