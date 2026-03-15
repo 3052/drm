@@ -10,17 +10,6 @@ func UuidOrGuid(data []byte) {
    data[6], data[7] = data[7], data[6]
 }
 
-type Device struct {
-   MaxLicenseSize       uint32
-   MaxHeaderSize        uint32
-   MaxLicenseChainDepth uint32
-}
-
-type Features struct {
-   Entries  uint32
-   Features []uint32
-}
-
 type ftlv struct {
    Flags  uint16
    Type   uint16

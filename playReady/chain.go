@@ -2,7 +2,6 @@
 package playReady
 
 import (
-   "41.neocities.org/drm/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/cipher"
@@ -11,16 +10,11 @@ import (
    "encoding/binary"
    "encoding/hex"
    "errors"
-   "github.com/emmansun/gmsm/padding"
    "slices"
    "strings"
-)
 
-// Object Flags
-const (
-   ObjFlagEmpty          = 0x0000
-   ObjFlagMustUnderstand = 0x0001
-   ObjFlagContainer      = 0x0002
+   "41.neocities.org/drm/playReady/xml"
+   "github.com/emmansun/gmsm/padding"
 )
 
 // Object Types
@@ -423,7 +417,7 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
          CertificateChain: c.Bytes(),
       },
       Features: xml.Features{
-         Feature: xml.Feature{"AESCBC"}, // SCALABLE
+         Feature: xml.Feature{Name: "AESCBC"}, // SCALABLE
       },
    }
    data, err := xml.Marshal(value)
