@@ -64,7 +64,7 @@ func (l *License) decode(data []byte) error {
 
    for offset < len(data) {
       f, n := decodeFtlv(data[offset:])
-      if ObjectType(f.Type) == ObjectTypeOuterContainer {
+      if XmrObject(f.Type) == XmrObjectOuterContainer {
          l.ContainerOuter.Valid = true
          l.parseOuterContainer(f.Value)
       }
@@ -78,11 +78,11 @@ func (l *License) parseOuterContainer(data []byte) {
    offset := 0
    for offset < len(data) {
       f, n := decodeFtlv(data[offset:])
-      switch ObjectType(f.Type) {
-      case ObjectTypeKeyMaterialContainer:
+      switch XmrObject(f.Type) {
+      case XmrObjectKeyMaterialContainer:
          l.ContainerOuter.ContainerKeys.Valid = true
          l.parseKeyMaterialContainer(f.Value)
-      case ObjectTypeSignatureObject:
+      case XmrObjectSignatureObject:
          l.ContainerOuter.Signature.Valid = true
          l.ContainerOuter.Signature.Type = binary.BigEndian.Uint16(f.Value[0:2])
          l.ContainerOuter.Signature.CBSignature = binary.BigEndian.Uint16(f.Value[2:4])
@@ -96,8 +96,8 @@ func (l *License) parseKeyMaterialContainer(data []byte) {
    offset := 0
    for offset < len(data) {
       f, n := decodeFtlv(data[offset:])
-      switch ObjectType(f.Type) {
-      case ObjectTypeContentKeyObject:
+      switch XmrObject(f.Type) {
+      case XmrObjectContentKeyObject:
          ck := &l.ContainerOuter.ContainerKeys.ContentKey
          ck.Valid = true
          ck.GuidKeyID = f.Value[0:16]
@@ -105,13 +105,13 @@ func (l *License) parseKeyMaterialContainer(data []byte) {
          ck.KeyEncryptionCipherType = binary.BigEndian.Uint16(f.Value[18:20])
          ck.CBEncryptedKey = binary.BigEndian.Uint16(f.Value[20:22])
          ck.EncryptedKeyBuffer = f.Value[22:]
-      case ObjectTypeEccDeviceKeyObject:
+      case XmrObjectEccDeviceKeyObject:
          ek := &l.ContainerOuter.ContainerKeys.ECCKey
          ek.Valid = true
          ek.EccCurveType = binary.BigEndian.Uint16(f.Value[0:2])
          ek.CBKeyData = binary.BigEndian.Uint16(f.Value[2:4])
          ek.KeyData = f.Value[4:]
-      case ObjectTypeAuxKeyObject:
+      case XmrObjectAuxKeyObject:
          ak := &l.ContainerOuter.ContainerKeys.AuxKey
          ak.Valid = true
          ak.Entries = binary.BigEndian.Uint16(f.Value[0:2])

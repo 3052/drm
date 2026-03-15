@@ -114,31 +114,31 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
 
    digest := sha256.Sum256(signPub)
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeBasic)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectBasic))
    unsignedCert.BasicInfo = &BasicInfo{
-      Header:         ObjectHeader{Flags: 0, Type: ObjTypeBasic, CbLength: 88},
+      Header:         ObjectHeader{Flags: 0, Type: uint16(BcertObjectBasic), CbLength: 88},
       SecurityLevel:  c.Certificates[0].BasicInfo.SecurityLevel,
       Type:           2,
       ExpirationDate: 4294967295,
    }
    copy(unsignedCert.BasicInfo.DigestValue[:], digest[:])
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeDevice)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectDevice))
    unsignedCert.DeviceInfo = &DeviceInfo{
-      Header:        ObjectHeader{Flags: 0, Type: ObjTypeDevice, CbLength: 20},
+      Header:        ObjectHeader{Flags: 0, Type: uint16(BcertObjectDevice), CbLength: 20},
       CbMaxLicense:  10240,
       CbMaxHeader:   15360,
       MaxChainDepth: 2,
    }
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeFeature)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectFeature))
    unsignedCert.FeatureInfo = &FeatureInfo{
-      Header:            ObjectHeader{Flags: 0, Type: ObjTypeFeature, CbLength: 16},
+      Header:            ObjectHeader{Flags: 0, Type: uint16(BcertObjectFeature), CbLength: 16},
       NumFeatureEntries: 1,
       FeatureSet:        []uint32{0xD}, // SCALABLE
    }
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeKey)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectKey))
    keySign := CertKey{
       Type:     1, // ECC 256
       Length:   512,
@@ -152,17 +152,17 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
       UsageSet: []uint32{2},
    }
    unsignedCert.KeyInfo = &KeyInfo{
-      Header:  ObjectHeader{Flags: 0, Type: ObjTypeKey, CbLength: 180},
+      Header:  ObjectHeader{Flags: 0, Type: uint16(BcertObjectKey), CbLength: 180},
       NumKeys: 2,
       Keys:    []CertKey{keySign, keyEnc},
    }
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeManufacturer)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectManufacturer))
    unsignedCert.ManufacturerInfo = c.Certificates[0].ManufacturerInfo
 
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, ObjTypeSignature)
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectSignature))
    unsignedCert.SignatureInfo = &SignatureInfo{
-      Header:          ObjectHeader{Flags: 1, Type: ObjTypeSignature, CbLength: 82},
+      Header:          ObjectHeader{Flags: 1, Type: uint16(BcertObjectSignature), CbLength: 82},
       SignatureType:   1,
       SignatureData:   SignatureData{Cb: 64, Value: make([]byte, 64)},
       IssuerKeyLength: uint32(len(modelPub)) * 8, // Bits representation natively

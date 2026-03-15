@@ -6,25 +6,27 @@ import (
    "strings"
 )
 
+type BcertObject uint16
+
 // Object Types
 const (
-   ObjTypeBasic            = 0x0001
-   ObjTypeDomain           = 0x0002
-   ObjTypePc               = 0x0003
-   ObjTypeDevice           = 0x0004
-   ObjTypeFeature          = 0x0005
-   ObjTypeKey              = 0x0006
-   ObjTypeManufacturer     = 0x0007
-   ObjTypeSignature        = 0x0008
-   ObjTypeSilverlight      = 0x0009
-   ObjTypeMetering         = 0x000a
-   ObjTypeExtDataSignKey   = 0x000b
-   ObjTypeExtDataContainer = 0x000c
-   ObjTypeExtDataSignature = 0x000d
-   ObjTypeExtDataHwid      = 0x000e
-   ObjTypeServer           = 0x000f
-   ObjTypeSecurityVersion  = 0x0010
-   ObjTypeSecurityVersion2 = 0x0011
+   BcertObjectBasic            BcertObject = 0x0001
+   BcertObjectDomain           BcertObject = 0x0002
+   BcertObjectPc               BcertObject = 0x0003
+   BcertObjectDevice           BcertObject = 0x0004
+   BcertObjectFeature          BcertObject = 0x0005
+   BcertObjectKey              BcertObject = 0x0006
+   BcertObjectManufacturer     BcertObject = 0x0007
+   BcertObjectSignature        BcertObject = 0x0008
+   BcertObjectSilverlight      BcertObject = 0x0009
+   BcertObjectMetering         BcertObject = 0x000a
+   BcertObjectExtDataSignKey   BcertObject = 0x000b
+   BcertObjectExtDataContainer BcertObject = 0x000c
+   BcertObjectExtDataSignature BcertObject = 0x000d
+   BcertObjectExtDataHwid      BcertObject = 0x000e
+   BcertObjectServer           BcertObject = 0x000f
+   BcertObjectSecurityVersion  BcertObject = 0x0010
+   BcertObjectSecurityVersion2 BcertObject = 0x0011
 )
 
 const (
