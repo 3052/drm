@@ -7,7 +7,7 @@
 
 Widevine implementation. first Widevine commit was May 21 2022:
 
-https://github.com/gucio321/mech/commit/9d3dff51
+https://github.com/gucio321/mech/commit/9d3dff51fbfe8e9ceec5db8d328b7da7434953dc
 
 ## wvdumper/dumper
 

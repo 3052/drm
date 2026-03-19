@@ -10,6 +10,10 @@
 
 https://wikipedia.org/wiki/PlayReady
 
+first PlayReady commit was June 3 2025:
+
+<https://github.com/mk386/3052_playReady/commit/32dd7a7b7d9459d1c9bdf8f0131c9d46>
+
 ## Microsoft Edge
 
 1. Settings and more
