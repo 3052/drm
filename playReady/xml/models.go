@@ -6,6 +6,11 @@ import (
    "encoding/xml"
 )
 
+var (
+   Marshal   = xml.Marshal
+   Unmarshal = xml.Unmarshal
+)
+
 type Body struct {
    AcquireLicense         *AcquireLicense
    AcquireLicenseResponse *struct {
@@ -24,10 +29,7 @@ type Body struct {
    }
 }
 
-var (
-   Marshal   = xml.Marshal
-   Unmarshal = xml.Unmarshal
-)
+///
 
 type WrmHeaderData struct {
    ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
