@@ -10,26 +10,6 @@ import (
    "testing"
 )
 
-var tests = []struct {
-   content_id string
-   key_id     string
-   license    string
-   web        string
-}{
-   {
-      content_id: "ff-ed04e3d2-1403519",
-      key_id:     "3c1863995f93b82bce88bace3a1aa67a",
-      license:    "https://license.9c9media.ca/widevine",
-      web:        "https://ctv.ca/movies/moneyball",
-   },
-   {
-      content_id: "895914f0e55cccdd3952c6572979b582-mc-0-139-0-0",
-      key_id:     "895914f0e55cccdd3952c6572979b582",
-      license:    "https://prod-kami.wuaki.tv/v1/licensing/wvm/a0c9f666-b9e2-4ef4-9b50-1579fff7ff11?uuid=a0c9f666-b9e2-4ef4-9b50-1579fff7ff11",
-      web:        "https://rakuten.tv/pt/movies/bound",
-   },
-}
-
 func TestLicense(t *testing.T) {
    cache, err := os.UserCacheDir()
    if err != nil {
@@ -97,4 +77,23 @@ func post(url_data string, data []byte) ([]byte, error) {
       return nil, errors.New(resp.Status)
    }
    return io.ReadAll(resp.Body)
+}
+var tests = []struct {
+   content_id string
+   key_id     string
+   license    string
+   web        string
+}{
+   {
+      content_id: "ff-ed04e3d2-1403519",
+      key_id:     "3c1863995f93b82bce88bace3a1aa67a",
+      license:    "https://license.9c9media.ca/widevine",
+      web:        "https://ctv.ca/movies/moneyball",
+   },
+   {
+      content_id: "895914f0e55cccdd3952c6572979b582-mc-0-139-0-0",
+      key_id:     "895914f0e55cccdd3952c6572979b582",
+      license:    "https://prod-kami.wuaki.tv/v1/licensing/wvm/a0c9f666-b9e2-4ef4-9b50-1579fff7ff11?uuid=a0c9f666-b9e2-4ef4-9b50-1579fff7ff11",
+      web:        "https://rakuten.tv/pt/movies/bound",
+   },
 }
