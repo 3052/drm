@@ -1,3 +1,4 @@
+// crypto.go
 package widevine
 
 import (
@@ -16,8 +17,8 @@ func (noopReader) Read(p []byte) (n int, err error) {
    return len(p), nil
 }
 
-func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
-   block, _ := pem.Decode(pemBytes)
+func DecodePrivateKey(pemData []byte) (*rsa.PrivateKey, error) {
+   block, _ := pem.Decode(pemData)
    if block == nil {
       return nil, errors.New("failed to decode PEM block containing private key")
    }
@@ -36,9 +37,9 @@ func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
    return rsaKey, nil
 }
 
-func signMessage(privateKey *rsa.PrivateKey, message []byte) ([]byte, error) {
+func signMessage(requestData []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
    hash := sha1.New()
-   hash.Write(message)
+   hash.Write(requestData)
    hashed := hash.Sum(nil)
    opts := &rsa.PSSOptions{
       SaltLength: rsa.PSSSaltLengthEqualsHash,

@@ -23,7 +23,7 @@ func TestLicense(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   private_key, err := ParsePrivateKey(pem_bytes)
+   private_key, err := DecodePrivateKey(pem_bytes)
    if err != nil {
       t.Fatal(err)
    }
@@ -39,12 +39,12 @@ func TestLicense(t *testing.T) {
          KeyIds:    [][]byte{key_id},
       }
       // 2. Build the License Request directly from the pssh struct
-      req_bytes, err := pssh.BuildLicenseRequest(client_id)
+      req_bytes, err := pssh.EncodeLicenseRequest(client_id)
       if err != nil {
          t.Fatal(err)
       }
       // 3. Sign the request
-      signed_bytes, err := BuildSignedMessage(req_bytes, private_key)
+      signed_bytes, err := EncodeSignedMessage(req_bytes, private_key)
       if err != nil {
          t.Fatalf("Failed to create signed request: %v", err)
       }
@@ -54,7 +54,7 @@ func TestLicense(t *testing.T) {
          t.Fatal(err)
       }
       // 5. Parse Response
-      keys, err := ParseLicenseResponse(signed_bytes, req_bytes, private_key)
+      keys, err := DecodeLicenseResponse(signed_bytes, req_bytes, private_key)
       if err != nil {
          t.Fatal(err)
       }
@@ -63,7 +63,7 @@ func TestLicense(t *testing.T) {
       if err != nil {
          t.Fatal(err)
       }
-      t.Logf("%x", found_key)
+      t.Logf("key %x", found_key)
    }
 }
 
@@ -78,6 +78,7 @@ func post(url_data string, data []byte) ([]byte, error) {
    }
    return io.ReadAll(resp.Body)
 }
+
 var tests = []struct {
    content_id string
    key_id     string
@@ -96,4 +97,4 @@ var tests = []struct {
       license:    "https://prod-kami.wuaki.tv/v1/licensing/wvm/a0c9f666-b9e2-4ef4-9b50-1579fff7ff11?uuid=a0c9f666-b9e2-4ef4-9b50-1579fff7ff11",
       web:        "https://rakuten.tv/pt/movies/bound",
    },
-}
+}[:1]

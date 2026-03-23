@@ -1,3 +1,4 @@
+// errors.go
 package widevine
 
 import (
@@ -24,7 +25,10 @@ func (le *LicenseError) Error() string {
 
 // decodeErrorFromMessage constructs a LicenseError struct from a pre-parsed protobuf message.
 func decodeErrorFromMessage(message protobuf.Message) error {
-   errorCode, _ := message.Field(1)
+   errorCode, ok := message.Field(1)
+   if !ok {
+      return &LicenseError{}
+   }
    return &LicenseError{
       ErrorCode: errorCode,
    }

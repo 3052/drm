@@ -1,3 +1,4 @@
+// request.go
 package widevine
 
 import (
@@ -5,9 +6,9 @@ import (
    "crypto/rsa"
 )
 
-// BuildLicenseRequest creates and serializes a LicenseRequest protobuf message.
-func (p *PsshData) BuildLicenseRequest(clientId []byte) ([]byte, error) {
-   psshBytes, err := p.Marshal()
+// EncodeLicenseRequest creates and serializes a LicenseRequest protobuf message.
+func (p *PsshData) EncodeLicenseRequest(clientId []byte) ([]byte, error) {
+   psshBytes, err := p.Encode()
    if err != nil {
       return nil, err
    }
@@ -23,15 +24,15 @@ func (p *PsshData) BuildLicenseRequest(clientId []byte) ([]byte, error) {
    return message.Encode()
 }
 
-// BuildSignedMessage envelopes the request with an RSA signature.
-func BuildSignedMessage(msg []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
-   signature, err := signMessage(privateKey, msg)
+// EncodeSignedMessage envelopes the request with an RSA signature.
+func EncodeSignedMessage(requestData []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
+   signature, err := signMessage(requestData, privateKey)
    if err != nil {
       return nil, err
    }
    message := protobuf.Message{
       protobuf.Varint(1, 1), // LICENSE_REQUEST
-      protobuf.Bytes(2, msg),
+      protobuf.Bytes(2, requestData),
       protobuf.Bytes(3, signature),
    }
    return message.Encode()

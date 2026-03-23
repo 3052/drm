@@ -1,6 +1,27 @@
+// pssh.go
 package widevine
 
 import "41.neocities.org/protobuf"
+
+// DecodePsshData parses the protobuf wire format into a PsshData struct.
+func DecodePsshData(data []byte) (*PsshData, error) {
+   message, err := protobuf.DecodeMessage(data)
+   if err != nil {
+      return nil, err
+   }
+
+   p := &PsshData{}
+   it := message.Iterator(2)
+   for it.Next() {
+      if field := it.Field(); field != nil {
+         p.KeyIds = append(p.KeyIds, field.Bytes)
+      }
+   }
+   if field, ok := message.Field(4); ok {
+      p.ContentId = field.Bytes
+   }
+   return p, nil
+}
 
 // PsshData represents the Widevine-specific protobuf message.
 type PsshData struct {
@@ -8,8 +29,8 @@ type PsshData struct {
    ContentId []byte
 }
 
-// Marshal serializes the PsshData struct into the protobuf wire format.
-func (p *PsshData) Marshal() ([]byte, error) {
+// Encode serializes the PsshData struct into the protobuf wire format.
+func (p *PsshData) Encode() ([]byte, error) {
    var message protobuf.Message
    for _, keyId := range p.KeyIds {
       if len(keyId) > 0 {
@@ -20,25 +41,4 @@ func (p *PsshData) Marshal() ([]byte, error) {
       message = append(message, protobuf.Bytes(4, p.ContentId))
    }
    return message.Encode()
-}
-
-// Unmarshal parses the protobuf wire format into the PsshData struct.
-func (p *PsshData) Unmarshal(data []byte) error {
-   var message protobuf.Message
-   if err := message.Parse(data); err != nil {
-      return err
-   }
-   p.KeyIds = nil
-   p.ContentId = nil
-
-   it := message.Iterator(2)
-   for it.Next() {
-      if field := it.Field(); field != nil {
-         p.KeyIds = append(p.KeyIds, field.Bytes)
-      }
-   }
-   if field, found := message.Field(4); found {
-      p.ContentId = field.Bytes
-   }
-   return nil
 }
