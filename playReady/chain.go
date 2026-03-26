@@ -2,6 +2,7 @@
 package playReady
 
 import (
+   "41.neocities.org/drm/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/cipher"
@@ -9,82 +10,9 @@ import (
    "crypto/sha256"
    "encoding/binary"
    "errors"
-   "slices"
-
-   "41.neocities.org/drm/playReady/xml"
    "github.com/emmansun/gmsm/padding"
+   "slices"
 )
-
-func ParseChain(data []byte) (*Chain, error) {
-   c := &Chain{}
-   if len(data) < 20 {
-      return nil, errors.New("chain data too short")
-   }
-
-   tag := binary.BigEndian.Uint32(data)
-   if tag != ChainHeaderTag {
-      return nil, errors.New("failed to find chain magic")
-   }
-   data = data[4:]
-
-   c.Header.HeaderTag = tag
-   c.Header.Version = binary.BigEndian.Uint32(data)
-   data = data[4:]
-
-   c.Header.CbChain = binary.BigEndian.Uint32(data)
-   data = data[4:]
-
-   c.Header.Flags = binary.BigEndian.Uint32(data)
-   data = data[4:]
-
-   certCount := binary.BigEndian.Uint32(data)
-   data = data[4:]
-
-   c.Header.Certs = certCount
-   c.Certificates = make([]Certificate, certCount)
-
-   for index := uint32(0); index < certCount; index++ {
-      var cert Certificate
-      bytesRead, err := cert.decode(data)
-      if err != nil {
-         return nil, err
-      }
-      c.Certificates[index] = cert
-      data = data[bytesRead:]
-   }
-
-   return c, nil
-}
-
-func (c *Chain) Bytes() []byte {
-   var certsData []byte
-   for _, cert := range c.Certificates {
-      certsData = append(certsData, cert.encode()...)
-   }
-
-   length := uint32(20 + len(certsData))
-
-   data := make([]byte, 20)
-   binary.BigEndian.PutUint32(data[0:4], ChainHeaderTag)
-   binary.BigEndian.PutUint32(data[4:8], c.Header.Version)
-   binary.BigEndian.PutUint32(data[8:12], length)
-   binary.BigEndian.PutUint32(data[12:16], c.Header.Flags)
-   binary.BigEndian.PutUint32(data[16:20], uint32(len(c.Certificates)))
-
-   return append(data, certsData...)
-}
-
-func (c *Chain) verify() bool {
-   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
-   for index := len(c.Certificates) - 1; index >= 0; index-- {
-      valid := c.Certificates[index].verify(modelBase)
-      if !valid {
-         return false
-      }
-      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
-   }
-   return true
-}
 
 func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
    modelPub, err := publicKeyBytes(modelKey)
@@ -274,4 +202,74 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    data = padding.NewPKCS7Padding(aes.BlockSize).Pad(data)
    cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
    return append(key.aesIv(), data...), nil
+}
+func ParseChain(data []byte) (*Chain, error) {
+   c := &Chain{}
+   if len(data) < 20 {
+      return nil, errors.New("chain data too short")
+   }
+
+   tag := binary.BigEndian.Uint32(data)
+   if tag != ChainHeaderTag {
+      return nil, errors.New("failed to find chain magic")
+   }
+   data = data[4:]
+
+   c.Header.HeaderTag = tag
+   c.Header.Version = binary.BigEndian.Uint32(data)
+   data = data[4:]
+
+   c.Header.CbChain = binary.BigEndian.Uint32(data)
+   data = data[4:]
+
+   c.Header.Flags = binary.BigEndian.Uint32(data)
+   data = data[4:]
+
+   certCount := binary.BigEndian.Uint32(data)
+   data = data[4:]
+
+   c.Header.Certs = certCount
+   c.Certificates = make([]Certificate, certCount)
+
+   for index := uint32(0); index < certCount; index++ {
+      var cert Certificate
+      bytesRead, err := cert.decode(data)
+      if err != nil {
+         return nil, err
+      }
+      c.Certificates[index] = cert
+      data = data[bytesRead:]
+   }
+
+   return c, nil
+}
+
+func (c *Chain) Bytes() []byte {
+   var certsData []byte
+   for _, cert := range c.Certificates {
+      certsData = append(certsData, cert.encode()...)
+   }
+
+   length := uint32(20 + len(certsData))
+
+   data := make([]byte, 20)
+   binary.BigEndian.PutUint32(data[0:4], ChainHeaderTag)
+   binary.BigEndian.PutUint32(data[4:8], c.Header.Version)
+   binary.BigEndian.PutUint32(data[8:12], length)
+   binary.BigEndian.PutUint32(data[12:16], c.Header.Flags)
+   binary.BigEndian.PutUint32(data[16:20], uint32(len(c.Certificates)))
+
+   return append(data, certsData...)
+}
+
+func (c *Chain) verify() bool {
+   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
+   for index := len(c.Certificates) - 1; index >= 0; index-- {
+      valid := c.Certificates[index].verify(modelBase)
+      if !valid {
+         return false
+      }
+      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
+   }
+   return true
 }

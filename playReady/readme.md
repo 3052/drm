@@ -31,3 +31,5 @@ then:
 3. Widevine DRM
    - disabled
 4. bitmovin.com/demos/drm
+5. DASH
+6. Load
