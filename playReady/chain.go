@@ -14,7 +14,22 @@ import (
    "slices"
 )
 
+func (c *Chain) verify() bool {
+   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
+   for index := len(c.Certificates) - 1; index >= 0; index-- {
+      valid := c.Certificates[index].verify(modelBase)
+      if !valid {
+         return false
+      }
+      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
+   }
+   return true
+}
+
 func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
+   if !c.verify() {
+      return errors.New("cert is not valid")
+   }
    modelPub, err := publicKeyBytes(modelKey)
    if err != nil {
       return err
@@ -22,10 +37,6 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    if !bytes.Equal(c.Certificates[0].KeyInfo.Keys[0].Value, modelPub) {
       return errors.New("zgpriv not for cert")
    }
-   if !c.verify() {
-      return errors.New("cert is not valid")
-   }
-
    signPub, err := publicKeyBytes(signingKey)
    if err != nil {
       return err
@@ -38,7 +49,7 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    var unsignedCert Certificate
    unsignedCert.Header.HeaderTag = CertHeaderTag
    unsignedCert.Header.Version = CertVersion
-   unsignedCert.UnknownRecords = make(map[uint16][]byte)
+   unsignedCert.UnknownRecords = make(map[uint16][]UnknownRecord)
 
    digest := sha256.Sum256(signPub)
 
@@ -203,6 +214,7 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    cipher.NewCBCEncrypter(block, key.aesIv()).CryptBlocks(data, data)
    return append(key.aesIv(), data...), nil
 }
+
 func ParseChain(data []byte) (*Chain, error) {
    c := &Chain{}
    if len(data) < 20 {
@@ -260,16 +272,4 @@ func (c *Chain) Bytes() []byte {
    binary.BigEndian.PutUint32(data[16:20], uint32(len(c.Certificates)))
 
    return append(data, certsData...)
-}
-
-func (c *Chain) verify() bool {
-   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
-   for index := len(c.Certificates) - 1; index >= 0; index-- {
-      valid := c.Certificates[index].verify(modelBase)
-      if !valid {
-         return false
-      }
-      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
-   }
-   return true
 }

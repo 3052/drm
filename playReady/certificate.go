@@ -34,7 +34,7 @@ func (c *Certificate) decode(data []byte) (int, error) {
    certData := data[n : n+certDataLen]
    n += certDataLen
 
-   c.UnknownRecords = make(map[uint16][]byte)
+   c.UnknownRecords = make(map[uint16][]UnknownRecord)
 
    var n1 int
    for n1 < len(certData) {
@@ -134,7 +134,10 @@ func (c *Certificate) decode(data []byte) (int, error) {
          keyBytes := int(c.SignatureInfo.IssuerKeyLength) / 8
          c.SignatureInfo.IssuerKey = valBytes[off : off+keyBytes]
       default:
-         c.UnknownRecords[recType] = valBytes
+         c.UnknownRecords[recType] = append(c.UnknownRecords[recType], UnknownRecord{
+            Flags: flags,
+            Value: valBytes,
+         })
       }
    }
    return n, nil
@@ -167,6 +170,7 @@ func (c *Certificate) verify(pubKey []byte) bool {
 func (c *Certificate) encode() []byte {
    var raw []byte
    var lengthToSignature uint32
+   unknownIdx := make(map[uint16]int)
 
    for _, recType := range c.RecordOrder {
       if BcertObject(recType) == BcertObjectSignature {
@@ -237,8 +241,11 @@ func (c *Certificate) encode() []byte {
             valBytes = append(valBytes, c.SignatureInfo.IssuerKey...)
          }
       default:
-         valBytes = c.UnknownRecords[recType]
-         flags = 0x0001
+         records := c.UnknownRecords[recType]
+         idx := unknownIdx[recType]
+         valBytes = records[idx].Value
+         flags = records[idx].Flags
+         unknownIdx[recType]++
       }
 
       raw = binary.BigEndian.AppendUint16(raw, flags)

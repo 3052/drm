@@ -137,6 +137,11 @@ type SignatureInfo struct {
    IssuerKey       []byte
 }
 
+type UnknownRecord struct {
+   Flags uint16
+   Value []byte
+}
+
 type Certificate struct {
    Header           CertHeader
    BasicInfo        *BasicInfo
@@ -147,7 +152,7 @@ type Certificate struct {
    SignatureInfo    *SignatureInfo
 
    RecordOrder    []uint16
-   UnknownRecords map[uint16][]byte
+   UnknownRecords map[uint16][]UnknownRecord
 }
 
 type ChainHeader struct {
