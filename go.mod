@@ -1,4 +1,4 @@
-module 41.neocities.org/drm
+module 41.neocities.org/diana
 
 go 1.26.0
 
@@ -8,4 +8,4 @@ require (
 	github.com/emmansun/gmsm v0.41.1
 )
 
-require golang.org/x/sys v0.42.0 // indirect
+require golang.org/x/sys v0.41.0 // indirect

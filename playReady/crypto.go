@@ -8,7 +8,7 @@ import (
    "crypto/elliptic"
    "encoding/hex"
 
-   "41.neocities.org/drm/playReady/xml"
+   "41.neocities.org/diana/playReady/xml"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
 )

@@ -2,7 +2,7 @@
 package playReady
 
 import (
-   "41.neocities.org/drm/playReady/xml"
+   "41.neocities.org/diana/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/cipher"

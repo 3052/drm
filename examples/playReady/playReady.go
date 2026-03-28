@@ -1,7 +1,7 @@
 package main
 
 import (
-   "41.neocities.org/drm/playReady"
+   "41.neocities.org/diana/playReady"
    "flag"
    "fmt"
    "log"

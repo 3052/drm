@@ -10,7 +10,7 @@ import (
    "errors"
    "log"
 
-   "41.neocities.org/drm/playReady/xml"
+   "41.neocities.org/diana/playReady/xml"
    "github.com/emmansun/gmsm/cbcmac"
 )
 

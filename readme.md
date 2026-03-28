@@ -1,4 +1,4 @@
-# DRM
+# diana
 
 > Oh, baby, every morning there are mountains to climb\
 > Taking all my time\
@@ -7,10 +7,10 @@
 >
 > [Grimes](//youtube.com/watch?v=N9XKLqGqwLA) (2015)
 
-Digital rights management
+Digital rights management (DRM)
 
 - <https://wikipedia.org/wiki/Digital_rights_management>
-- https://41.neocities.org/drm
+- https://41.neocities.org/diana
 - https://wikipedia.org/wiki/PlayReady
 - https://wikipedia.org/wiki/Widevine
 
