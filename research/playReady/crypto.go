@@ -13,94 +13,6 @@ import (
    "github.com/emmansun/gmsm/cipher"
 )
 
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*xml.La, error) {
-   genKey, err := elGamalKeyGeneration()
-   if err != nil {
-      return nil, err
-   }
-   cipherValue, err := elGamalEncrypt(pubKey, genKey)
-   if err != nil {
-      return nil, err
-   }
-
-   headerData := xml.WrmHeaderData{
-      ProtectInfo: xml.ProtectInfo{
-         KeyLen: "16",
-         AlgId:  "AESCTR",
-      },
-      Kid: kid,
-   }
-
-   if contentId != "" {
-      headerData.CustomAttributes = &xml.CustomAttributes{
-         ContentID: contentId,
-      }
-   }
-
-   return &xml.La{
-      XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
-      Id:      "SignedData",
-      Version: "1",
-      ContentHeader: xml.ContentHeader{
-         WrmHeader: xml.WrmHeader{
-            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
-            Version: "4.0.0.0",
-            Data:    headerData,
-         },
-      },
-      EncryptedData: xml.EncryptedData{
-         XmlNs: "http://www.w3.org/2001/04/xmlenc#",
-         Type:  "http://www.w3.org/2001/04/xmlenc#Element",
-         EncryptionMethod: xml.Algorithm{
-            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
-         },
-         KeyInfo: xml.KeyInfo{
-            XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-            EncryptedKey: xml.EncryptedKey{
-               XmlNs: "http://www.w3.org/2001/04/xmlenc#",
-               EncryptionMethod: xml.Algorithm{
-                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
-               },
-               KeyInfo: xml.EncryptedKeyInfo{
-                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
-                  KeyName: "WMRMServer",
-               },
-               CipherData: xml.CipherData{
-                  CipherValue: cipherValue,
-               },
-            },
-         },
-         CipherData: xml.CipherData{
-            CipherValue: cipherData,
-         },
-      },
-   }, nil
-}
-
-func GenerateKey() (*ecdsa.PrivateKey, error) {
-   return ecdsa.GenerateKey(elliptic.P256(), nil)
-}
-
-func ParseRawPrivateKey(data []byte) (*ecdsa.PrivateKey, error) {
-   return ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
-}
-
-func PrivateKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
-   ecdhKey, err := key.ECDH()
-   if err != nil {
-      return nil, err
-   }
-   return ecdhKey.Bytes(), nil
-}
-
-func publicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
-   ecdhKey, err := key.PublicKey.ECDH()
-   if err != nil {
-      return nil, err
-   }
-   // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
-   return ecdhKey.Bytes()[1:], nil
-}
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
 const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
 
@@ -231,4 +143,94 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
    }
 
    return ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed[:])
+}
+
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, laUrl string) (*xml.La, error) {
+   genKey, err := elGamalKeyGeneration()
+   if err != nil {
+      return nil, err
+   }
+   cipherValue, err := elGamalEncrypt(pubKey, genKey)
+   if err != nil {
+      return nil, err
+   }
+
+   headerData := xml.WrmHeaderData{
+      ProtectInfo: xml.ProtectInfo{
+         KeyLen: "16",
+         AlgId:  "AESCTR",
+      },
+      Kid:   kid,
+      LaUrl: laUrl,
+   }
+
+   if contentID != "" {
+      headerData.CustomAttributes = &xml.CustomAttributes{
+         ContentID: contentID,
+      }
+   }
+
+   return &xml.La{
+      XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
+      Id:      "SignedData",
+      Version: "1",
+      ContentHeader: xml.ContentHeader{
+         WrmHeader: xml.WrmHeader{
+            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
+            Version: "4.0.0.0",
+            Data:    headerData,
+         },
+      },
+      EncryptedData: xml.EncryptedData{
+         XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+         Type:  "http://www.w3.org/2001/04/xmlenc#Element",
+         EncryptionMethod: xml.Algorithm{
+            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+         },
+         KeyInfo: xml.KeyInfo{
+            XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+            EncryptedKey: xml.EncryptedKey{
+               XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+               EncryptionMethod: xml.Algorithm{
+                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
+               },
+               KeyInfo: xml.EncryptedKeyInfo{
+                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
+                  KeyName: "WMRMServer",
+               },
+               CipherData: xml.CipherData{
+                  CipherValue: cipherValue,
+               },
+            },
+         },
+         CipherData: xml.CipherData{
+            CipherValue: cipherData,
+         },
+      },
+   }, nil
+}
+
+func GenerateKey() (*ecdsa.PrivateKey, error) {
+   return ecdsa.GenerateKey(elliptic.P256(), nil)
+}
+
+func ParseRawPrivateKey(data []byte) (*ecdsa.PrivateKey, error) {
+   return ecdsa.ParseRawPrivateKey(elliptic.P256(), data)
+}
+
+func PrivateKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.ECDH()
+   if err != nil {
+      return nil, err
+   }
+   return ecdhKey.Bytes(), nil
+}
+
+func publicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
+   ecdhKey, err := key.PublicKey.ECDH()
+   if err != nil {
+      return nil, err
+   }
+   // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
+   return ecdhKey.Bytes()[1:], nil
 }

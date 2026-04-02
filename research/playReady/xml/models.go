@@ -29,9 +29,12 @@ type Body struct {
    }
 }
 
+///
+
 type WrmHeaderData struct {
    ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
    Kid              Bytes             `xml:"KID"`
+   LaUrl            string            `xml:"LA_URL,omitempty"`
    CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
 }
 
