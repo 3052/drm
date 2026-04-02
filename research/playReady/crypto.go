@@ -13,7 +13,7 @@ import (
    "github.com/emmansun/gmsm/cipher"
 )
 
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, laUrl string, checksum []byte) (*xml.La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string) (*xml.La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
       return nil, err
@@ -29,8 +29,6 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, la
          AlgId:  "AESCTR",
       },
       Kid:      kid,
-      LaUrl:    laUrl,
-      Checksum: checksum,
    }
 
    if contentID != "" {

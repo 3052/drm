@@ -6,6 +6,12 @@ import (
    "encoding/xml"
 )
 
+type WrmHeaderData struct {
+   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
+   Kid              Bytes             `xml:"KID"`
+   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
+}
+
 type AcquireLicense struct {
    Challenge Challenge `xml:"challenge"`
 }
@@ -37,14 +43,6 @@ type Body struct {
    Fault *struct {
       Fault string `xml:"faultstring"`
    }
-}
-
-type WrmHeaderData struct {
-   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
-   Kid              Bytes             `xml:"KID"`
-   LaUrl            string            `xml:"LA_URL,omitempty"`
-   Checksum         Bytes             `xml:"CHECKSUM,omitempty"`
-   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
 }
 
 type CustomAttributes struct {

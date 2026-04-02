@@ -15,7 +15,7 @@ import (
    "github.com/emmansun/gmsm/padding"
 )
 
-func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentID string, laUrl string, checksum []byte) ([]byte, error) {
+func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentID string) ([]byte, error) {
    var key xmlKey
    err := key.initialize()
    if err != nil {
@@ -27,7 +27,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
       return nil, err
    }
 
-   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentID, laUrl, checksum)
+   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentID)
    if err != nil {
       return nil, err
    }

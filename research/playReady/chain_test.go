@@ -2,13 +2,54 @@ package playReady
 
 import (
    "bytes"
-   "encoding/base64"
+   "encoding/hex"
    "encoding/json"
    "io"
    "net/http"
    "os"
    "testing"
 )
+
+var craveTests = []struct {
+   keyID     string
+   contentID string
+   transform func([]byte) ([]byte, error)
+   url       string
+   expectKey string
+}{
+   {
+      keyID:     "3f962a1fb6aadb5cbc484df69dfda971",
+      contentID: "ff-41f446bd-1474247",
+      transform: func(payload []byte) ([]byte, error) {
+         return json.Marshal(map[string]any{
+            "payload": payload,
+            "playbackContext": map[string]any{
+               "contentId":        3300246,
+               "contentpackageId": 8401705,
+               "destinationId":    1880,
+               "platformId":       1,
+               "jwt":              "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI2OTk2N2RhOWM5M2VlZjVkZjIwZjg3MTIiLCJzY29wZSI6ImFjY291bnQ6d3JpdGUgZGVmYXVsdCBtYXR1cml0eTphZHVsdCIsImlzcyI6Imh0dHBzOi8vYWNjb3VudC5iZWxsbWVkaWEuY2EiLCJjb250ZXh0Ijp7InByb2ZpbGVfaWQiOiI2OTk3MGVmYTczMTc2ZDJiMmU1M2E1YTMiLCJicmFuZF9pZHMiOlsiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTExIiwiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTE0IiwiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTE1Il19LCJleHAiOjE3NzUxNzcwNTEsImlhdCI6MTc3NTE2MjY1MSwidmVyc2lvbiI6IlYyIiwianRpIjoiMTRmYzI5OTktOGE5Yy00MGM3LWJhZmQtZjk0NTgwMTY4OGViIiwiYXV0aG9yaXRpZXMiOlsiUkVHVUxBUl9VU0VSIl0sImNsaWVudF9pZCI6ImNyYXZlLXdlYiJ9.mAsFKgZ0ez7LAYD30E0okAryrcVMtE0RvdjXS9i7j6wHY6B_w3snV-_kE5r-x0yvvQISaVBYmbUSkrSKzq_XEElZCWzJKyGzz28eyRkQJ-Jx2sigEmuA-vyLRaqcz3bK09fKbg4c1ekIv9uOTV2tJqnbP4cXMu7Cazp_thhQ3HtXyA9rzDm4vhoyhTkoo0mTKs--uhpxgO03UbuR7zPWbbAQsvy0yWCjgaEf61xKG6G9j6qp95g5cbt43UYv0OMzKZRAdu_61r8nGG3eTiqP_nyUu1fVDAm9Eb8AqHxdz7CnFcWyMEysMdAKD6NneukC9cLW2LtjBWYw0XaSLsBu9w",
+            },
+         })
+      },
+      url:       "https://license.9c9media.com/playready",
+      expectKey: "13207ee81394da90b6451e9ec0e917a7",
+   },
+   {
+      keyID:     "10000000000000000000000000000000",
+      contentID: "",
+      transform: func(payload []byte) ([]byte, error) { return payload, nil },
+      url:       "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==",
+      expectKey: "00000000000000000000000000000000",
+   },
+   {
+      keyID:     "10000000000000000000000000000000",
+      contentID: "",
+      transform: func(payload []byte) ([]byte, error) { return payload, nil },
+      url:       "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
+      expectKey: "00000000000000000000000000000000",
+   },
+}
 
 func TestCrave(t *testing.T) {
    paths := getPaths("ignore/SL3000")
@@ -36,62 +77,63 @@ func TestCrave(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
-   kid, err := base64.StdEncoding.DecodeString("HyqWP6q2XNu8SE32nf2pcQ==")
-   if err != nil {
-      t.Fatal(err)
+
+   for _, tc := range craveTests {
+      kid, err := hex.DecodeString(tc.keyID)
+      if err != nil {
+         t.Fatal(err)
+      }
+      UuidOrGuid(kid)
+
+      payload, err := chain_data.LicenseRequestBytes(signingKey, kid, tc.contentID)
+      if err != nil {
+         t.Fatal(err)
+      }
+      
+      reqData, err := tc.transform(payload)
+      if err != nil {
+         t.Fatal(err)
+      }
+
+      req, err := http.NewRequest("POST", tc.url, bytes.NewReader(reqData))
+      if err != nil {
+         t.Fatal(err)
+      }
+      t.Log(req.URL)
+
+      // Scope the defer strictly to the response lifecycle
+      func() {
+         resp, err := http.DefaultClient.Do(req)
+         if err != nil {
+            t.Fatal(err)
+         }
+         defer resp.Body.Close()
+
+         respData, err := io.ReadAll(resp.Body)
+         if err != nil {
+            t.Fatal(err)
+         }
+         if resp.StatusCode != http.StatusOK {
+            t.Fatalf("unexpected status %d: %s", resp.StatusCode, string(respData))
+         }
+
+         licenseData, err := ParseLicense(respData)
+         if err != nil {
+            t.Fatal(err)
+         }
+
+         key, err := licenseData.Decrypt(encryptKey)
+         if err != nil {
+            t.Fatal(err)
+         }
+
+         keyHex := hex.EncodeToString(key)
+         if keyHex != tc.expectKey {
+            t.Fatalf("expected key %s, got %s", tc.expectKey, keyHex)
+         }
+         t.Logf("Successfully retrieved expected key: %x", key)
+      }()
    }
-   checksum, err := base64.StdEncoding.DecodeString("KHc2PIih8ko=")
-   if err != nil {
-      t.Fatal(err)
-   }
-   payload, err := chain_data.LicenseRequestBytes(
-      signingKey, kid, "ff-41f446bd-1474247",
-      "http://license.9c9media.ca/playready", checksum,
-   )
-   if err != nil {
-      t.Fatal(err)
-   }
-   data, err = json.Marshal(map[string]any{
-      "payload": payload,
-      "playbackContext": map[string]any{
-         "contentId": 3300246,
-         "contentpackageId": 8401705,
-         "destinationId": 1880,
-         "platformId": 1,
-         "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiI2OTk2N2RhOWM5M2VlZjVkZjIwZjg3MTIiLCJzY29wZSI6ImFjY291bnQ6d3JpdGUgZGVmYXVsdCBtYXR1cml0eTphZHVsdCIsImlzcyI6Imh0dHBzOi8vYWNjb3VudC5iZWxsbWVkaWEuY2EiLCJjb250ZXh0Ijp7InByb2ZpbGVfaWQiOiI2OTk3MGVmYTczMTc2ZDJiMmU1M2E1YTMiLCJicmFuZF9pZHMiOlsiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTExIiwiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTE0IiwiMWQ3MmQ5OTBjYjc2NWRlN2U0MjExMTE1Il19LCJleHAiOjE3NzUxNzcwNTEsImlhdCI6MTc3NTE2MjY1MSwidmVyc2lvbiI6IlYyIiwianRpIjoiMTRmYzI5OTktOGE5Yy00MGM3LWJhZmQtZjk0NTgwMTY4OGViIiwiYXV0aG9yaXRpZXMiOlsiUkVHVUxBUl9VU0VSIl0sImNsaWVudF9pZCI6ImNyYXZlLXdlYiJ9.mAsFKgZ0ez7LAYD30E0okAryrcVMtE0RvdjXS9i7j6wHY6B_w3snV-_kE5r-x0yvvQISaVBYmbUSkrSKzq_XEElZCWzJKyGzz28eyRkQJ-Jx2sigEmuA-vyLRaqcz3bK09fKbg4c1ekIv9uOTV2tJqnbP4cXMu7Cazp_thhQ3HtXyA9rzDm4vhoyhTkoo0mTKs--uhpxgO03UbuR7zPWbbAQsvy0yWCjgaEf61xKG6G9j6qp95g5cbt43UYv0OMzKZRAdu_61r8nGG3eTiqP_nyUu1fVDAm9Eb8AqHxdz7CnFcWyMEysMdAKD6NneukC9cLW2LtjBWYw0XaSLsBu9w",
-      },
-   })
-   if err != nil {
-      t.Fatal(err)
-   }
-   req, err := http.NewRequest(
-      "POST", "https://license.9c9media.com/playready", bytes.NewReader(data),
-   )
-   if err != nil {
-      t.Fatal(err)
-   }
-   t.Log(req.URL)
-   resp, err := http.DefaultClient.Do(req)
-   if err != nil {
-      t.Fatal(err)
-   }
-   defer resp.Body.Close()
-   data, err = io.ReadAll(resp.Body)
-   if err != nil {
-      t.Fatal(err)
-   }
-   if resp.StatusCode != http.StatusOK {
-      t.Fatal(string(data))
-   }
-   licenseData, err := ParseLicense(data)
-   if err != nil {
-      t.Fatal(err)
-   }
-   key, err := licenseData.Decrypt(encryptKey)
-   if err != nil {
-      t.Fatal(err)
-   }
-   t.Logf("%x", key)
 }
 
 type testPaths struct {
