@@ -2,7 +2,6 @@
 package playReady
 
 import (
-   "41.neocities.org/diana/research/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/cipher"
@@ -10,8 +9,10 @@ import (
    "crypto/sha256"
    "encoding/binary"
    "errors"
-   "github.com/emmansun/gmsm/padding"
    "slices"
+
+   "41.neocities.org/diana/research/playReady/xml"
+   "github.com/emmansun/gmsm/padding"
 )
 
 func (c *Chain) verify() bool {
@@ -126,7 +127,7 @@ func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey)
    return nil
 }
 
-func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentID string, laUrl string) ([]byte, error) {
+func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentID string, laUrl string, checksum []byte) ([]byte, error) {
    var key xmlKey
    err := key.initialize()
    if err != nil {
@@ -138,7 +139,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
       return nil, err
    }
 
-   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentID, laUrl)
+   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentID, laUrl, checksum)
    if err != nil {
       return nil, err
    }
@@ -151,8 +152,17 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
 
    signedInfo := xml.SignedInfo{
       XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+      CanonicalizationMethod: xml.Algorithm{
+         Algorithm: "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+      },
+      SignatureMethod: xml.Algorithm{
+         Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecdsa-sha256",
+      },
       Reference: xml.Reference{
-         Uri:         "#SignedData",
+         Uri: "#SignedData",
+         DigestMethod: xml.Algorithm{
+            Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#sha256",
+         },
          DigestValue: laDigest[:],
       },
    }
@@ -172,7 +182,14 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    sigR.FillBytes(sign[:32])
    sigS.FillBytes(sign[32:])
 
+   sigPubBytes, err := publicKeyBytes(signingKey)
+   if err != nil {
+      return nil, err
+   }
+
    envelope := xml.Envelope{
+      Xsi:  "http://www.w3.org/2001/XMLSchema-instance",
+      Xsd:  "http://www.w3.org/2001/XMLSchema",
       Soap: "http://schemas.xmlsoap.org/soap/envelope/",
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
@@ -182,15 +199,30 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
                   XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
                   La:    laRequest,
                   Signature: xml.Signature{
+                     XmlNs:          "http://www.w3.org/2000/09/xmldsig#",
                      SignedInfo:     signedInfo,
                      SignatureValue: sign[:],
+                     KeyInfo: &xml.SignatureKeyInfo{
+                        XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+                        KeyValue: xml.KeyValue{
+                           ECCKeyValue: xml.ECCKeyValue{
+                              PublicKey: sigPubBytes,
+                           },
+                        },
+                     },
                   },
                },
             },
          },
       },
    }
-   return xml.Marshal(envelope)
+   
+   outBytes, err := xml.Marshal(envelope)
+   if err != nil {
+      return nil, err
+   }
+   
+   return append([]byte(xml.Header), outBytes...), nil
 }
 
 func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {

@@ -145,7 +145,7 @@ func elGamalKeyGeneration() (*ecdsa.PublicKey, error) {
    return ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed[:])
 }
 
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, laUrl string) (*xml.La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, laUrl string, checksum []byte) (*xml.La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
       return nil, err
@@ -160,8 +160,9 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, la
          KeyLen: "16",
          AlgId:  "AESCTR",
       },
-      Kid:   kid,
-      LaUrl: laUrl,
+      Kid:      kid,
+      LaUrl:    laUrl,
+      Checksum: checksum,
    }
 
    if contentID != "" {
@@ -171,9 +172,10 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, la
    }
 
    return &xml.La{
-      XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/protocols",
-      Id:      "SignedData",
-      Version: "1",
+      XmlNs:    "http://schemas.microsoft.com/DRM/2007/03/protocols",
+      Id:       "SignedData",
+      XmlSpace: "preserve",
+      Version:  "1",
       ContentHeader: xml.ContentHeader{
          WrmHeader: xml.WrmHeader{
             XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
@@ -181,6 +183,11 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string, la
             Data:    headerData,
          },
       },
+      ClientInfo: &xml.ClientInfo{
+         ClientVersion: "10.0.16384.10011",
+      },
+      LicenseNonce: "O2a6XbCuy98QBlqZb31ibw==",
+      ClientTime:   "1775086626",
       EncryptedData: xml.EncryptedData{
          XmlNs: "http://www.w3.org/2001/04/xmlenc#",
          Type:  "http://www.w3.org/2001/04/xmlenc#Element",

@@ -6,6 +6,8 @@ import (
    "encoding/xml"
 )
 
+const Header = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+
 var (
    Marshal   = xml.Marshal
    Unmarshal = xml.Unmarshal
@@ -35,6 +37,7 @@ type WrmHeaderData struct {
    ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
    Kid              Bytes             `xml:"KID"`
    LaUrl            string            `xml:"LA_URL,omitempty"`
+   Checksum         Bytes             `xml:"CHECKSUM,omitempty"`
    CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
 }
 
@@ -59,6 +62,8 @@ func (b *Bytes) UnmarshalText(data []byte) error {
 
 type Envelope struct {
    XMLName xml.Name `xml:"soap:Envelope"`
+   Xsi     string   `xml:"xmlns:xsi,attr"`
+   Xsd     string   `xml:"xmlns:xsd,attr"`
    Soap    string   `xml:"xmlns:soap,attr"`
    Body    Body     `xml:"soap:Body"`
 }
@@ -68,13 +73,29 @@ type EnvelopeResponse struct {
 }
 
 type Signature struct {
+   XmlNs          string            `xml:"xmlns,attr,omitempty"`
    SignedInfo     SignedInfo
    SignatureValue Bytes
+   KeyInfo        *SignatureKeyInfo `xml:"KeyInfo,omitempty"`
+}
+
+type SignatureKeyInfo struct {
+   XmlNs    string   `xml:"xmlns,attr"`
+   KeyValue KeyValue `xml:"KeyValue"`
+}
+
+type KeyValue struct {
+   ECCKeyValue ECCKeyValue `xml:"ECCKeyValue"`
+}
+
+type ECCKeyValue struct {
+   PublicKey Bytes `xml:"PublicKey"`
 }
 
 type Reference struct {
-   Uri         string `xml:"URI,attr"`
-   DigestValue Bytes
+   Uri          string `xml:"URI,attr"`
+   DigestMethod Algorithm
+   DigestValue  Bytes
 }
 
 type CipherData struct {
@@ -116,10 +137,10 @@ type EncryptedData struct {
 }
 
 type EncryptedKey struct {
-   XmlNs            string `xml:"xmlns,attr"`
+   XmlNs            string           `xml:"xmlns,attr"`
    EncryptionMethod Algorithm
-   CipherData       CipherData
    KeyInfo          EncryptedKeyInfo
+   CipherData       CipherData
 }
 
 type EncryptedKeyInfo struct {
@@ -146,12 +167,20 @@ type KeyInfo struct {
    EncryptedKey EncryptedKey
 }
 
+type ClientInfo struct {
+   ClientVersion string `xml:"CLIENTVERSION"`
+}
+
 type La struct {
    XMLName       xml.Name `xml:"LA"`
    XmlNs         string   `xml:"xmlns,attr"`
    Id            string   `xml:"Id,attr"`
+   XmlSpace      string   `xml:"xml:space,attr"`
    Version       string
    ContentHeader ContentHeader
+   ClientInfo    *ClientInfo `xml:"CLIENTINFO,omitempty"`
+   LicenseNonce  string      `xml:"LicenseNonce,omitempty"`
+   ClientTime    string      `xml:"ClientTime,omitempty"`
    EncryptedData EncryptedData
 }
 
@@ -161,8 +190,10 @@ type ProtectInfo struct {
 }
 
 type SignedInfo struct {
-   XmlNs     string `xml:"xmlns,attr"`
-   Reference Reference
+   XmlNs                  string `xml:"xmlns,attr"`
+   CanonicalizationMethod Algorithm
+   SignatureMethod        Algorithm
+   Reference              Reference
 }
 
 type WrmHeader struct {
