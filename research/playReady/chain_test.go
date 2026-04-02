@@ -18,6 +18,13 @@ var craveTests = []struct {
    expectKey string
 }{
    {
+      keyID:     "10000000000000000000000000000000",
+      contentID: "",
+      transform: func(payload []byte) ([]byte, error) { return payload, nil },
+      url:       "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
+      expectKey: "00000000000000000000000000000000",
+   },
+   {
       keyID:     "3f962a1fb6aadb5cbc484df69dfda971",
       contentID: "ff-41f446bd-1474247",
       transform: func(payload []byte) ([]byte, error) {
@@ -34,20 +41,6 @@ var craveTests = []struct {
       },
       url:       "https://license.9c9media.com/playready",
       expectKey: "13207ee81394da90b6451e9ec0e917a7",
-   },
-   {
-      keyID:     "10000000000000000000000000000000",
-      contentID: "",
-      transform: func(payload []byte) ([]byte, error) { return payload, nil },
-      url:       "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==",
-      expectKey: "00000000000000000000000000000000",
-   },
-   {
-      keyID:     "10000000000000000000000000000000",
-      contentID: "",
-      transform: func(payload []byte) ([]byte, error) { return payload, nil },
-      url:       "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
-      expectKey: "00000000000000000000000000000000",
    },
 }
 
@@ -112,7 +105,7 @@ func TestCrave(t *testing.T) {
             t.Fatal(err)
          }
          if resp.StatusCode != http.StatusOK {
-            t.Fatalf("unexpected status %d: %s", resp.StatusCode, string(respData))
+            t.Fatalf("StatusCode %v respData %q", resp.StatusCode, string(respData))
          }
 
          licenseData, err := ParseLicense(respData)

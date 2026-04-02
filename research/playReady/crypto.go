@@ -13,7 +13,7 @@ import (
    "github.com/emmansun/gmsm/cipher"
 )
 
-func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string) (*xml.La, error) {
+func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*xml.La, error) {
    genKey, err := elGamalKeyGeneration()
    if err != nil {
       return nil, err
@@ -22,7 +22,6 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string) (*
    if err != nil {
       return nil, err
    }
-
    headerData := xml.WrmHeaderData{
       ProtectInfo: xml.ProtectInfo{
          KeyLen: "16",
@@ -30,18 +29,16 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string) (*
       },
       Kid:      kid,
    }
-
-   if contentID != "" {
+   if contentId != "" {
       headerData.CustomAttributes = &xml.CustomAttributes{
-         ContentID: contentID,
+         ContentId: contentId,
       }
    }
-
    return &xml.La{
       XmlNs:    "http://schemas.microsoft.com/DRM/2007/03/protocols",
       Id:       "SignedData",
-      XmlSpace: "preserve",
       Version:  "1",
+      LicenseNonce: make([]byte, 16),
       ContentHeader: xml.ContentHeader{
          WrmHeader: xml.WrmHeader{
             XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
@@ -49,11 +46,6 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentID string) (*
             Data:    headerData,
          },
       },
-      ClientInfo: &xml.ClientInfo{
-         ClientVersion: "10.0.16384.10011",
-      },
-      LicenseNonce: "O2a6XbCuy98QBlqZb31ibw==",
-      ClientTime:   "1775086626",
       EncryptedData: xml.EncryptedData{
          XmlNs: "http://www.w3.org/2001/04/xmlenc#",
          Type:  "http://www.w3.org/2001/04/xmlenc#Element",

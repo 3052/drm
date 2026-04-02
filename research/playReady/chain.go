@@ -40,17 +40,8 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
 
    signedInfo := xml.SignedInfo{
       XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-      CanonicalizationMethod: xml.Algorithm{
-         Algorithm: "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
-      },
-      SignatureMethod: xml.Algorithm{
-         Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecdsa-sha256",
-      },
       Reference: xml.Reference{
          Uri: "#SignedData",
-         DigestMethod: xml.Algorithm{
-            Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#sha256",
-         },
          DigestValue: laDigest[:],
       },
    }
@@ -69,13 +60,9 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    var sign [64]byte
    sigR.FillBytes(sign[:32])
    sigS.FillBytes(sign[32:])
-
-   sigPubBytes, err := publicKeyBytes(signingKey)
-   if err != nil {
-      return nil, err
-   }
+   
    envelope := xml.Envelope{
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/", // license.9c9media.com
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
             XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
@@ -84,17 +71,8 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
                   XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
                   La:    laRequest,
                   Signature: xml.Signature{
-                     XmlNs:          "http://www.w3.org/2000/09/xmldsig#",
                      SignedInfo:     signedInfo,
                      SignatureValue: sign[:],
-                     KeyInfo: &xml.SignatureKeyInfo{
-                        XmlNs: "http://www.w3.org/2000/09/xmldsig#",
-                        KeyValue: xml.KeyValue{
-                           ECCKeyValue: xml.ECCKeyValue{
-                              PublicKey: sigPubBytes,
-                           },
-                        },
-                     },
                   },
                },
             },

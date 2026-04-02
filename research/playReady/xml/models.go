@@ -6,21 +6,17 @@ import (
    "encoding/xml"
 )
 
-type AcquireLicense struct {
-   XmlNs     string    `xml:"xmlns,attr"`
-   Challenge Challenge `xml:"challenge"`
+func (b Bytes) MarshalText() ([]byte, error) {
+   return base64.StdEncoding.AppendEncode(nil, b), nil
 }
 
-type WrmHeaderData struct {
-   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
-   Kid              Bytes             `xml:"KID"`
-   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
-}
-
-type Envelope struct {
-   XMLName xml.Name `xml:"soap:Envelope"`
-   Soap    string   `xml:"xmlns:soap,attr"`
-   Body    Body     `xml:"soap:Body"`
+func (b *Bytes) UnmarshalText(data []byte) error {
+   var err error
+   *b, err = base64.StdEncoding.AppendDecode(nil, data)
+   if err != nil {
+      return err
+   }
+   return nil
 }
 
 var (
@@ -28,8 +24,18 @@ var (
    Unmarshal = xml.Unmarshal
 )
 
+// multiple parents
+type Bytes []byte
+
+// zero parents
+type Envelope struct {
+   XMLName xml.Name `xml:"soap:Envelope"` // microsoft.com
+   Soap    string   `xml:"xmlns:soap,attr"` // microsoft.com
+   Body    Body     `xml:"soap:Body"` // microsoft.com
+}
+
+// multiple parents
 type Body struct {
-   AcquireLicense         *AcquireLicense
    AcquireLicenseResponse *struct {
       AcquireLicenseResult struct {
          Response struct {
@@ -44,152 +50,148 @@ type Body struct {
    Fault *struct {
       Fault string `xml:"faultstring"`
    }
+   AcquireLicense *AcquireLicense // microsoft.com
 }
 
-type CustomAttributes struct {
-   ContentID string `xml:"CONTENTID,omitempty"`
+// one parent
+type AcquireLicense struct {
+   XmlNs     string    `xml:"xmlns,attr"` // microsoft.com
+   Challenge Challenge `xml:"challenge"` // microsoft.com
 }
 
-type Bytes []byte
-
-func (b Bytes) MarshalText() ([]byte, error) {
-   return base64.StdEncoding.AppendEncode(nil, b), nil
-}
-
-func (b *Bytes) UnmarshalText(data []byte) error {
-   var err error
-   *b, err = base64.StdEncoding.AppendDecode(nil, data)
-   if err != nil {
-      return err
-   }
-   return nil
-}
-
-type EnvelopeResponse struct {
-   Body Body
-}
-
-type KeyValue struct {
-   ECCKeyValue ECCKeyValue `xml:"ECCKeyValue"`
-}
-
-type ECCKeyValue struct {
-   PublicKey Bytes `xml:"PublicKey"`
-}
-
-type Reference struct {
-   Uri          string `xml:"URI,attr"`
-   DigestMethod Algorithm
-   DigestValue  Bytes
-}
-
-type CipherData struct {
-   CipherValue Bytes
-}
-
-type CertificateChains struct {
-   CertificateChain Bytes
-}
-
-type Algorithm struct {
-   Algorithm string `xml:"Algorithm,attr"`
-}
-
+// one parent
 type Challenge struct {
-   Challenge InnerChallenge
+   Challenge InnerChallenge // microsoft.com
 }
 
-type ContentHeader struct {
-   WrmHeader WrmHeader `xml:"WRMHEADER"`
+// one parent
+type InnerChallenge struct {
+   XmlNs     string `xml:"xmlns,attr"` // microsoft.com
+   La        *La // microsoft.com
+   Signature Signature // microsoft.com
 }
 
-type Data struct {
-   CertificateChains CertificateChains
-   Features          Features
-}
-
-type Feature struct {
-   Name string `xml:",attr"`
-}
-
-type Features struct {
-   Feature Feature
-}
-
-type ClientInfo struct {
-   ClientVersion string `xml:"CLIENTVERSION"`
-}
-
-type ProtectInfo struct {
-   KeyLen string `xml:"KEYLEN"`
-   AlgId  string `xml:"ALGID"`
-}
-
+// one parent
 type Signature struct {
-   XmlNs          string            `xml:"xmlns,attr,omitempty"`
-   SignedInfo     SignedInfo
-   SignatureValue Bytes
-   KeyInfo        *SignatureKeyInfo `xml:"KeyInfo,omitempty"`
+   SignatureValue Bytes // microsoft.com
+   SignedInfo     SignedInfo // microsoft.com
 }
 
-type SignatureKeyInfo struct {
-   XmlNs    string   `xml:"xmlns,attr"`
-   KeyValue KeyValue `xml:"KeyValue"`
+// multiple parents
+type Algorithm struct {
+   Algorithm string `xml:"Algorithm,attr"` // microsoft.com
 }
 
+// one parent
+type SignedInfo struct {
+   XmlNs                  string `xml:"xmlns,attr"` // microsoft.com
+   Reference              Reference // microsoft.com
+}
+
+// one parent
+type Reference struct {
+   Uri          string `xml:"URI,attr"` // microsoft.com
+   DigestValue  Bytes // microsoft.com
+}
+
+// one parent
+type WrmHeader struct {
+   XmlNs   string        `xml:"xmlns,attr"` // microsoft.com
+   Version string        `xml:"version,attr"` // microsoft.com
+   Data    WrmHeaderData `xml:"DATA"` // microsoft.com
+}
+
+// one parent
+type ContentHeader struct {
+   WrmHeader WrmHeader `xml:"WRMHEADER"` // microsoft.com
+}
+
+// one parent
+type La struct {
+   XMLName       xml.Name `xml:"LA"` // microsoft.com
+   XmlNs         string   `xml:"xmlns,attr"` // microsoft.com
+   Id            string   `xml:"Id,attr"` // microsoft.com
+   Version       string // microsoft.com
+   ClientTime int // 9c9media.com
+   LicenseNonce  Bytes // 9c9media.com
+   ContentHeader ContentHeader // microsoft.com
+   EncryptedData EncryptedData // microsoft.com
+}
+
+// multiple parent
+type CipherData struct {
+   CipherValue Bytes // microsoft.com
+}
+
+// one parent
+type KeyInfo struct {
+   XmlNs        string `xml:"xmlns,attr"` // microsoft.com
+   EncryptedKey EncryptedKey
+}
+
+// one parent
 type EncryptedData struct {
-   XmlNs            string `xml:"xmlns,attr"`
-   Type             string `xml:"Type,attr"`
-   EncryptionMethod Algorithm
-   KeyInfo          KeyInfo
+   XmlNs            string `xml:"xmlns,attr"` // microsoft.com
+   Type             string `xml:"Type,attr"` // microsoft.com
+   EncryptionMethod Algorithm // microsoft.com
+   KeyInfo          KeyInfo // microsoft.com
    CipherData       CipherData
 }
 
+// one parent
+type WrmHeaderData struct {
+   Kid              Bytes             `xml:"KID"` // microsoft.com
+   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES"` // 9c9media.com
+   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
+}
+
+// one parent
+type ProtectInfo struct {
+   KeyLen string `xml:"KEYLEN"` // microsoft.com
+   AlgId  string `xml:"ALGID"` // microsoft.com
+}
+
+// one parent
 type EncryptedKey struct {
-   XmlNs            string           `xml:"xmlns,attr"`
+   XmlNs            string           `xml:"xmlns,attr"` // microsoft.com
    EncryptionMethod Algorithm
    KeyInfo          EncryptedKeyInfo
    CipherData       CipherData
 }
 
+// one parent
 type EncryptedKeyInfo struct {
-   XmlNs   string `xml:"xmlns,attr"`
-   KeyName string
+   XmlNs   string `xml:"xmlns,attr"` // microsoft.com
+   KeyName string // microsoft.com
 }
 
-type InnerChallenge struct {
-   XmlNs     string `xml:"xmlns,attr"`
-   La        *La
-   Signature Signature
+// one parent
+type CustomAttributes struct {
+   ContentId string `xml:"CONTENTID"` // 9c9media.com
 }
 
-type KeyInfo struct {
-   XmlNs        string `xml:"xmlns,attr"`
-   EncryptedKey EncryptedKey
+// zero parent
+type EnvelopeResponse struct {
+   Body Body
 }
 
-type La struct {
-   XMLName       xml.Name `xml:"LA"`
-   XmlNs         string   `xml:"xmlns,attr"`
-   Id            string   `xml:"Id,attr"`
-   XmlSpace      string   `xml:"xml:space,attr"`
-   Version       string
-   ContentHeader ContentHeader
-   ClientInfo    *ClientInfo `xml:"CLIENTINFO,omitempty"`
-   LicenseNonce  string      `xml:"LicenseNonce,omitempty"`
-   ClientTime    string      `xml:"ClientTime,omitempty"`
-   EncryptedData EncryptedData
+// one parent
+type CertificateChains struct {
+   CertificateChain Bytes
 }
 
-type SignedInfo struct {
-   XmlNs                  string `xml:"xmlns,attr"`
-   CanonicalizationMethod Algorithm
-   SignatureMethod        Algorithm
-   Reference              Reference
+// zero parent
+type Data struct {
+   CertificateChains CertificateChains
+   Features          Features
 }
 
-type WrmHeader struct {
-   XmlNs   string        `xml:"xmlns,attr"`
-   Version string        `xml:"version,attr"`
-   Data    WrmHeaderData `xml:"DATA"`
+// one parent
+type Feature struct {
+   Name string `xml:",attr"`
+}
+
+// one parent
+type Features struct {
+   Feature Feature
 }
