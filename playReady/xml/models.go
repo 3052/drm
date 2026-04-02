@@ -6,6 +6,11 @@ import (
    "encoding/xml"
 )
 
+type AcquireLicense struct {
+   XmlNs     string    `xml:"xmlns,attr"`
+   Challenge Challenge `xml:"challenge"`
+}
+
 var (
    Marshal   = xml.Marshal
    Unmarshal = xml.Unmarshal
@@ -28,8 +33,6 @@ type Body struct {
       Fault string `xml:"faultstring"`
    }
 }
-
-///
 
 type WrmHeaderData struct {
    ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
@@ -77,11 +80,6 @@ type CipherData struct {
 
 type CertificateChains struct {
    CertificateChain Bytes
-}
-
-type AcquireLicense struct {
-   XmlNs     string    `xml:"xmlns,attr"`
-   Challenge Challenge `xml:"challenge"`
 }
 
 type Algorithm struct {

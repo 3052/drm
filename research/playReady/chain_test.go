@@ -84,12 +84,10 @@ func TestCrave(t *testing.T) {
          t.Fatal(err)
       }
       UuidOrGuid(kid)
-
       payload, err := chain_data.LicenseRequestBytes(signingKey, kid, tc.contentID)
       if err != nil {
          t.Fatal(err)
       }
-      
       reqData, err := tc.transform(payload)
       if err != nil {
          t.Fatal(err)

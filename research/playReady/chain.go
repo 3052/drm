@@ -78,6 +78,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
       Soap: "http://schemas.xmlsoap.org/soap/envelope/", // license.9c9media.com
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
+            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
             Challenge: xml.Challenge{
                Challenge: xml.InnerChallenge{
                   XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",

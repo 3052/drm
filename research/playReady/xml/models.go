@@ -6,14 +6,15 @@ import (
    "encoding/xml"
 )
 
+type AcquireLicense struct {
+   XmlNs     string    `xml:"xmlns,attr"`
+   Challenge Challenge `xml:"challenge"`
+}
+
 type WrmHeaderData struct {
    ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
    Kid              Bytes             `xml:"KID"`
    CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
-}
-
-type AcquireLicense struct {
-   Challenge Challenge `xml:"challenge"`
 }
 
 type Envelope struct {

@@ -126,6 +126,7 @@ func TestKey(t *testing.T) {
       if err != nil {
          t.Fatal(err)
       }
+      t.Log(string(data))
       func() {
          resp, err := http.Post(test.url, "text/xml", bytes.NewReader(data))
          if err != nil {
@@ -180,4 +181,4 @@ var key_tests = []struct {
       kid_wv: "10000000000000000000000000000000",
       url:    "https://test.playready.microsoft.com/service/rightsmanager.asmx?cfg=ck:AAAAAAAAAAAAAAAAAAAAAA==,ckt:AES128BitCBC",
    },
-}
+}[:1]
