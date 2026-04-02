@@ -14,119 +14,7 @@ import (
    "slices"
 )
 
-func (c *Chain) verify() bool {
-   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
-   for index := len(c.Certificates) - 1; index >= 0; index-- {
-      valid := c.Certificates[index].verify(modelBase)
-      if !valid {
-         return false
-      }
-      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
-   }
-   return true
-}
-
-func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
-   if !c.verify() {
-      return errors.New("cert is not valid")
-   }
-   modelPub, err := publicKeyBytes(modelKey)
-   if err != nil {
-      return err
-   }
-   if !bytes.Equal(c.Certificates[0].KeyInfo.Keys[0].Value, modelPub) {
-      return errors.New("zgpriv not for cert")
-   }
-   signPub, err := publicKeyBytes(signingKey)
-   if err != nil {
-      return err
-   }
-   encPub, err := publicKeyBytes(encryptKey)
-   if err != nil {
-      return err
-   }
-
-   var unsignedCert Certificate
-   unsignedCert.Header.HeaderTag = CertHeaderTag
-   unsignedCert.Header.Version = CertVersion
-   unsignedCert.UnknownRecords = make(map[uint16][]UnknownRecord)
-
-   digest := sha256.Sum256(signPub)
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectBasic))
-   unsignedCert.BasicInfo = &BasicInfo{
-      Header:         ObjectHeader{Flags: 0, Type: uint16(BcertObjectBasic), CbLength: 88},
-      SecurityLevel:  c.Certificates[0].BasicInfo.SecurityLevel,
-      Type:           2,
-      ExpirationDate: 4294967295,
-   }
-   copy(unsignedCert.BasicInfo.DigestValue[:], digest[:])
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectDevice))
-   unsignedCert.DeviceInfo = &DeviceInfo{
-      Header:        ObjectHeader{Flags: 0, Type: uint16(BcertObjectDevice), CbLength: 20},
-      CbMaxLicense:  10240,
-      CbMaxHeader:   15360,
-      MaxChainDepth: 2,
-   }
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectFeature))
-   unsignedCert.FeatureInfo = &FeatureInfo{
-      Header:            ObjectHeader{Flags: 0, Type: uint16(BcertObjectFeature), CbLength: 16},
-      NumFeatureEntries: 1,
-      FeatureSet:        []uint32{0xD}, // SCALABLE
-   }
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectKey))
-   keySign := CertKey{
-      Type:     1, // ECC 256
-      Length:   512,
-      Value:    signPub,
-      UsageSet: []uint32{1},
-   }
-   keyEnc := CertKey{
-      Type:     1, // ECC 256
-      Length:   512,
-      Value:    encPub,
-      UsageSet: []uint32{2},
-   }
-   unsignedCert.KeyInfo = &KeyInfo{
-      Header:  ObjectHeader{Flags: 0, Type: uint16(BcertObjectKey), CbLength: 180},
-      NumKeys: 2,
-      Keys:    []CertKey{keySign, keyEnc},
-   }
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectManufacturer))
-   unsignedCert.ManufacturerInfo = c.Certificates[0].ManufacturerInfo
-
-   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectSignature))
-   unsignedCert.SignatureInfo = &SignatureInfo{
-      Header:          ObjectHeader{Flags: 1, Type: uint16(BcertObjectSignature), CbLength: 82},
-      SignatureType:   1,
-      SignatureData:   SignatureData{Cb: 64, Value: make([]byte, 64)},
-      IssuerKeyLength: uint32(len(modelPub)) * 8, // Bits representation natively
-      IssuerKey:       modelPub,
-   }
-
-   certData := unsignedCert.encode()
-   lengthToSig := binary.BigEndian.Uint32(certData[12:16])
-   sigDigest := sha256.Sum256(certData[:lengthToSig])
-
-   sigR, sigS, err := ecdsa.Sign(nil, modelKey, sigDigest[:])
-   if err != nil {
-      return err
-   }
-
-   var sign [64]byte
-   sigR.FillBytes(sign[:32])
-   sigS.FillBytes(sign[32:])
-   unsignedCert.SignatureInfo.SignatureData.Value = sign[:]
-
-   c.Certificates = slices.Insert(c.Certificates, 0, unsignedCert)
-   return nil
-}
-
-func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([]byte, error) {
+func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentId string) ([]byte, error) {
    var key xmlKey
    err := key.initialize()
    if err != nil {
@@ -138,7 +26,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([
       return nil, err
    }
 
-   laRequest, err := newLa(key.PublicKey, cipherOutput, kid)
+   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentId)
    if err != nil {
       return nil, err
    }
@@ -272,4 +160,115 @@ func (c *Chain) Bytes() []byte {
    binary.BigEndian.PutUint32(data[16:20], uint32(len(c.Certificates)))
 
    return append(data, certsData...)
+}
+func (c *Chain) verify() bool {
+   modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
+   for index := len(c.Certificates) - 1; index >= 0; index-- {
+      valid := c.Certificates[index].verify(modelBase)
+      if !valid {
+         return false
+      }
+      modelBase = c.Certificates[index].KeyInfo.Keys[0].Value
+   }
+   return true
+}
+
+func (c *Chain) GenerateLeaf(modelKey, signingKey, encryptKey *ecdsa.PrivateKey) error {
+   if !c.verify() {
+      return errors.New("cert is not valid")
+   }
+   modelPub, err := publicKeyBytes(modelKey)
+   if err != nil {
+      return err
+   }
+   if !bytes.Equal(c.Certificates[0].KeyInfo.Keys[0].Value, modelPub) {
+      return errors.New("zgpriv not for cert")
+   }
+   signPub, err := publicKeyBytes(signingKey)
+   if err != nil {
+      return err
+   }
+   encPub, err := publicKeyBytes(encryptKey)
+   if err != nil {
+      return err
+   }
+
+   var unsignedCert Certificate
+   unsignedCert.Header.HeaderTag = CertHeaderTag
+   unsignedCert.Header.Version = CertVersion
+   unsignedCert.UnknownRecords = make(map[uint16][]UnknownRecord)
+
+   digest := sha256.Sum256(signPub)
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectBasic))
+   unsignedCert.BasicInfo = &BasicInfo{
+      Header:         ObjectHeader{Flags: 0, Type: uint16(BcertObjectBasic), CbLength: 88},
+      SecurityLevel:  c.Certificates[0].BasicInfo.SecurityLevel,
+      Type:           2,
+      ExpirationDate: 4294967295,
+   }
+   copy(unsignedCert.BasicInfo.DigestValue[:], digest[:])
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectDevice))
+   unsignedCert.DeviceInfo = &DeviceInfo{
+      Header:        ObjectHeader{Flags: 0, Type: uint16(BcertObjectDevice), CbLength: 20},
+      CbMaxLicense:  10240,
+      CbMaxHeader:   15360,
+      MaxChainDepth: 2,
+   }
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectFeature))
+   unsignedCert.FeatureInfo = &FeatureInfo{
+      Header:            ObjectHeader{Flags: 0, Type: uint16(BcertObjectFeature), CbLength: 16},
+      NumFeatureEntries: 1,
+      FeatureSet:        []uint32{0xD}, // SCALABLE
+   }
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectKey))
+   keySign := CertKey{
+      Type:     1, // ECC 256
+      Length:   512,
+      Value:    signPub,
+      UsageSet: []uint32{1},
+   }
+   keyEnc := CertKey{
+      Type:     1, // ECC 256
+      Length:   512,
+      Value:    encPub,
+      UsageSet: []uint32{2},
+   }
+   unsignedCert.KeyInfo = &KeyInfo{
+      Header:  ObjectHeader{Flags: 0, Type: uint16(BcertObjectKey), CbLength: 180},
+      NumKeys: 2,
+      Keys:    []CertKey{keySign, keyEnc},
+   }
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectManufacturer))
+   unsignedCert.ManufacturerInfo = c.Certificates[0].ManufacturerInfo
+
+   unsignedCert.RecordOrder = append(unsignedCert.RecordOrder, uint16(BcertObjectSignature))
+   unsignedCert.SignatureInfo = &SignatureInfo{
+      Header:          ObjectHeader{Flags: 1, Type: uint16(BcertObjectSignature), CbLength: 82},
+      SignatureType:   1,
+      SignatureData:   SignatureData{Cb: 64, Value: make([]byte, 64)},
+      IssuerKeyLength: uint32(len(modelPub)) * 8, // Bits representation natively
+      IssuerKey:       modelPub,
+   }
+
+   certData := unsignedCert.encode()
+   lengthToSig := binary.BigEndian.Uint32(certData[12:16])
+   sigDigest := sha256.Sum256(certData[:lengthToSig])
+
+   sigR, sigS, err := ecdsa.Sign(nil, modelKey, sigDigest[:])
+   if err != nil {
+      return err
+   }
+
+   var sign [64]byte
+   sigR.FillBytes(sign[:32])
+   sigS.FillBytes(sign[32:])
+   unsignedCert.SignatureInfo.SignatureData.Value = sign[:]
+
+   c.Certificates = slices.Insert(c.Certificates, 0, unsignedCert)
+   return nil
 }

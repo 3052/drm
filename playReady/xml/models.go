@@ -29,11 +29,14 @@ type Body struct {
    }
 }
 
-///
-
 type WrmHeaderData struct {
-   ProtectInfo ProtectInfo `xml:"PROTECTINFO"`
-   Kid         Bytes       `xml:"KID"`
+   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
+   Kid              Bytes             `xml:"KID"`
+   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES,omitempty"`
+}
+
+type CustomAttributes struct {
+   ContentID string `xml:"CONTENTID,omitempty"`
 }
 
 type Bytes []byte
