@@ -6,7 +6,15 @@ import (
    "encoding/xml"
 )
 
-const Header = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+type AcquireLicense struct {
+   Challenge Challenge `xml:"challenge"`
+}
+
+type Envelope struct {
+   XMLName xml.Name `xml:"soap:Envelope"`
+   Soap    string   `xml:"xmlns:soap,attr"`
+   Body    Body     `xml:"soap:Body"`
+}
 
 var (
    Marshal   = xml.Marshal
@@ -30,8 +38,6 @@ type Body struct {
       Fault string `xml:"faultstring"`
    }
 }
-
-///
 
 type WrmHeaderData struct {
    ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
@@ -60,28 +66,8 @@ func (b *Bytes) UnmarshalText(data []byte) error {
    return nil
 }
 
-type Envelope struct {
-   XMLName xml.Name `xml:"soap:Envelope"`
-   Xsi     string   `xml:"xmlns:xsi,attr"`
-   Xsd     string   `xml:"xmlns:xsd,attr"`
-   Soap    string   `xml:"xmlns:soap,attr"`
-   Body    Body     `xml:"soap:Body"`
-}
-
 type EnvelopeResponse struct {
    Body Body
-}
-
-type Signature struct {
-   XmlNs          string            `xml:"xmlns,attr,omitempty"`
-   SignedInfo     SignedInfo
-   SignatureValue Bytes
-   KeyInfo        *SignatureKeyInfo `xml:"KeyInfo,omitempty"`
-}
-
-type SignatureKeyInfo struct {
-   XmlNs    string   `xml:"xmlns,attr"`
-   KeyValue KeyValue `xml:"KeyValue"`
 }
 
 type KeyValue struct {
@@ -106,11 +92,6 @@ type CertificateChains struct {
    CertificateChain Bytes
 }
 
-type AcquireLicense struct {
-   XmlNs     string    `xml:"xmlns,attr"`
-   Challenge Challenge `xml:"challenge"`
-}
-
 type Algorithm struct {
    Algorithm string `xml:"Algorithm,attr"`
 }
@@ -126,6 +107,35 @@ type ContentHeader struct {
 type Data struct {
    CertificateChains CertificateChains
    Features          Features
+}
+
+type Feature struct {
+   Name string `xml:",attr"`
+}
+
+type Features struct {
+   Feature Feature
+}
+
+type ClientInfo struct {
+   ClientVersion string `xml:"CLIENTVERSION"`
+}
+
+type ProtectInfo struct {
+   KeyLen string `xml:"KEYLEN"`
+   AlgId  string `xml:"ALGID"`
+}
+
+type Signature struct {
+   XmlNs          string            `xml:"xmlns,attr,omitempty"`
+   SignedInfo     SignedInfo
+   SignatureValue Bytes
+   KeyInfo        *SignatureKeyInfo `xml:"KeyInfo,omitempty"`
+}
+
+type SignatureKeyInfo struct {
+   XmlNs    string   `xml:"xmlns,attr"`
+   KeyValue KeyValue `xml:"KeyValue"`
 }
 
 type EncryptedData struct {
@@ -148,14 +158,6 @@ type EncryptedKeyInfo struct {
    KeyName string
 }
 
-type Feature struct {
-   Name string `xml:",attr"`
-}
-
-type Features struct {
-   Feature Feature
-}
-
 type InnerChallenge struct {
    XmlNs     string `xml:"xmlns,attr"`
    La        *La
@@ -165,10 +167,6 @@ type InnerChallenge struct {
 type KeyInfo struct {
    XmlNs        string `xml:"xmlns,attr"`
    EncryptedKey EncryptedKey
-}
-
-type ClientInfo struct {
-   ClientVersion string `xml:"CLIENTVERSION"`
 }
 
 type La struct {
@@ -182,11 +180,6 @@ type La struct {
    LicenseNonce  string      `xml:"LicenseNonce,omitempty"`
    ClientTime    string      `xml:"ClientTime,omitempty"`
    EncryptedData EncryptedData
-}
-
-type ProtectInfo struct {
-   KeyLen string `xml:"KEYLEN"`
-   AlgId  string `xml:"ALGID"`
 }
 
 type SignedInfo struct {

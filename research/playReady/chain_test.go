@@ -70,6 +70,7 @@ func TestCrave(t *testing.T) {
    if err != nil {
       t.Fatal(err)
    }
+   t.Log(req.URL)
    resp, err := http.DefaultClient.Do(req)
    if err != nil {
       t.Fatal(err)

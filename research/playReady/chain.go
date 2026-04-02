@@ -74,14 +74,10 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    if err != nil {
       return nil, err
    }
-
    envelope := xml.Envelope{
-      Xsi:  "http://www.w3.org/2001/XMLSchema-instance",
-      Xsd:  "http://www.w3.org/2001/XMLSchema",
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/", // license.9c9media.com
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
-            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
             Challenge: xml.Challenge{
                Challenge: xml.InnerChallenge{
                   XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
@@ -104,13 +100,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
          },
       },
    }
-   
-   outBytes, err := xml.Marshal(envelope)
-   if err != nil {
-      return nil, err
-   }
-   
-   return append([]byte(xml.Header), outBytes...), nil
+   return xml.Marshal(envelope)
 }
 
 func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
