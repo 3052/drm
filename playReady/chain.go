@@ -2,7 +2,6 @@
 package playReady
 
 import (
-   "41.neocities.org/diana/playReady/xml"
    "bytes"
    "crypto/aes"
    "crypto/cipher"
@@ -10,11 +9,13 @@ import (
    "crypto/sha256"
    "encoding/binary"
    "errors"
-   "github.com/emmansun/gmsm/padding"
    "slices"
+
+   "41.neocities.org/diana/playReady/xml"
+   "github.com/emmansun/gmsm/padding"
 )
 
-func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([]byte, error) {
+func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, contentID string) ([]byte, error) {
    var key xmlKey
    err := key.initialize()
    if err != nil {
@@ -26,7 +27,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([
       return nil, err
    }
 
-   laRequest, err := newLa(key.PublicKey, cipherOutput, kid)
+   laRequest, err := newLa(key.PublicKey, cipherOutput, kid, contentID)
    if err != nil {
       return nil, err
    }
@@ -38,11 +39,11 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([
    laDigest := sha256.Sum256(laData)
 
    signedInfo := xml.SignedInfo{
-      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
       Reference: xml.Reference{
-         Uri:         "#SignedData",
          DigestValue: laDigest[:],
+         Uri:         "#SignedData",
       },
+      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
    }
 
    signedData, err := xml.Marshal(signedInfo)
@@ -61,22 +62,22 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte) ([
    sigS.FillBytes(sign[32:])
 
    envelope := xml.Envelope{
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
-            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
-            Challenge: xml.Challenge{
+            Challenge: xml.OuterChallenge{
                Challenge: xml.InnerChallenge{
-                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
-                  La:    laRequest,
+                  La: laRequest,
                   Signature: xml.Signature{
-                     SignedInfo:     signedInfo,
                      SignatureValue: sign[:],
+                     SignedInfo:     signedInfo,
                   },
+                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
                },
             },
+            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
          },
       },
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
    }
    return xml.Marshal(envelope)
 }
@@ -87,7 +88,9 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
          CertificateChain: c.Bytes(),
       },
       Features: xml.Features{
-         Feature: xml.Feature{Name: "AESCBC"}, // SCALABLE
+         Feature: xml.Feature{
+            Name: "AESCBC", // SCALABLE
+         },
       },
    }
    data, err := xml.Marshal(value)
