@@ -161,6 +161,7 @@ func (c *Chain) Bytes() []byte {
 
    return append(data, certsData...)
 }
+
 func (c *Chain) verify() bool {
    modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
    for index := len(c.Certificates) - 1; index >= 0; index-- {

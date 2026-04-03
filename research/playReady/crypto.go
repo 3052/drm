@@ -27,7 +27,7 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*
          KeyLen: "16",
          AlgId:  "AESCTR",
       },
-      Kid:      kid,
+      Kid: kid,
    }
    if contentId != "" {
       headerData.CustomAttributes = &xml.CustomAttributes{
@@ -35,9 +35,9 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*
       }
    }
    return &xml.La{
-      XmlNs:    "http://schemas.microsoft.com/DRM/2007/03/protocols",
-      Id:       "SignedData",
-      Version:  "1",
+      XmlNs:        "http://schemas.microsoft.com/DRM/2007/03/protocols",
+      Id:           "SignedData",
+      Version:      "1",
       LicenseNonce: make([]byte, 16),
       ContentHeader: xml.ContentHeader{
          WrmHeader: xml.WrmHeader{
@@ -99,6 +99,7 @@ func publicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
    // Return 64 bytes (X and Y coordinates) without the 0x04 uncompressed prefix
    return ecdhKey.Bytes()[1:], nil
 }
+
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
 const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
 

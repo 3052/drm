@@ -41,7 +41,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    signedInfo := xml.SignedInfo{
       XmlNs: "http://www.w3.org/2000/09/xmldsig#",
       Reference: xml.Reference{
-         Uri: "#SignedData",
+         Uri:         "#SignedData",
          DigestValue: laDigest[:],
       },
    }
@@ -60,9 +60,8 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    var sign [64]byte
    sigR.FillBytes(sign[:32])
    sigS.FillBytes(sign[32:])
-   
+
    envelope := xml.Envelope{
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
             XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
@@ -78,6 +77,7 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
             },
          },
       },
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
    }
    return xml.Marshal(envelope)
 }
@@ -162,6 +162,7 @@ func (c *Chain) Bytes() []byte {
 
    return append(data, certsData...)
 }
+
 func (c *Chain) verify() bool {
    modelBase := c.Certificates[len(c.Certificates)-1].SignatureInfo.IssuerKey
    for index := len(c.Certificates) - 1; index >= 0; index-- {
