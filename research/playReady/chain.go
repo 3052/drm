@@ -39,11 +39,11 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    laDigest := sha256.Sum256(laData)
 
    signedInfo := xml.SignedInfo{
-      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
       Reference: xml.Reference{
-         Uri:         "#SignedData",
          DigestValue: laDigest[:],
+         Uri:         "#SignedData",
       },
+      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
    }
 
    signedData, err := xml.Marshal(signedInfo)
@@ -64,17 +64,17 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    envelope := xml.Envelope{
       Body: xml.Body{
          AcquireLicense: &xml.AcquireLicense{
-            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
-            Challenge: xml.Challenge{
+            Challenge: xml.OuterChallenge{
                Challenge: xml.InnerChallenge{
-                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
                   La:    laRequest,
                   Signature: xml.Signature{
-                     SignedInfo:     signedInfo,
                      SignatureValue: sign[:],
+                     SignedInfo:     signedInfo,
                   },
+                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
                },
             },
+            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
          },
       },
       Soap: "http://schemas.xmlsoap.org/soap/envelope/",
@@ -88,7 +88,9 @@ func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
          CertificateChain: c.Bytes(),
       },
       Features: xml.Features{
-         Feature: xml.Feature{Name: "AESCBC"}, // SCALABLE
+         Feature: xml.Feature{
+            Name: "AESCBC", // SCALABLE
+         },
       },
    }
    data, err := xml.Marshal(value)

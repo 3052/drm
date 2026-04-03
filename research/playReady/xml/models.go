@@ -27,13 +27,13 @@ var (
 type Bytes []byte
 
 type Envelope struct {
-   Body    Body     `xml:"soap:Body"`
-   Soap    string   `xml:"xmlns:soap,attr"`
-   XMLName xml.Name `xml:"soap:Envelope"`
+   Body    Body     `xml:"soap:Body"`       // microsoft.com
+   Soap    string   `xml:"xmlns:soap,attr"` // microsoft.com
+   XMLName xml.Name `xml:"soap:Envelope"`   // microsoft.com
 }
 
 type Body struct {
-   AcquireLicense         *AcquireLicense
+   AcquireLicense         *AcquireLicense // microsoft.com
    AcquireLicenseResponse *struct {
       AcquireLicenseResult struct {
          Response struct {
@@ -51,124 +51,124 @@ type Body struct {
 }
 
 type AcquireLicense struct {
-   Challenge Challenge `xml:"challenge"`
-   XmlNs     string    `xml:"xmlns,attr"`
+   Challenge OuterChallenge `xml:"challenge"`    // microsoft.com
+   XmlNs     string         `xml:"xmlns,attr"` // microsoft.com
 }
 
-type Challenge struct {
-   Challenge InnerChallenge
+type OuterChallenge struct {
+   Challenge InnerChallenge // microsoft.com
 }
 
 type Signature struct {
-   SignatureValue Bytes
-   SignedInfo     SignedInfo
-}
-
-type Algorithm struct {
-   Algorithm string `xml:"Algorithm,attr"`
-}
-
-type ContentHeader struct {
-   WrmHeader WrmHeader `xml:"WRMHEADER"`
-}
-
-type CipherData struct {
-   CipherValue Bytes
-}
-
-type CustomAttributes struct {
-   ContentId string `xml:"CONTENTID"`
+   SignatureValue Bytes      // microsoft.com
+   SignedInfo     SignedInfo // microsoft.com
 }
 
 type EnvelopeResponse struct {
    Body Body
 }
 
-type CertificateChains struct {
-   CertificateChain Bytes
-}
-
 type Data struct {
-   CertificateChains CertificateChains
-   Features          Features
+   CertificateChains CertificateChains // microsoft.com
+   Features          Features          // microsoft.com
 }
 
-type Feature struct {
-   Name string `xml:",attr"`
+type CertificateChains struct {
+   CertificateChain Bytes // microsoft.com
 }
 
 type Features struct {
-   Feature Feature
+   Feature Feature // microsoft.com
+}
+
+type Feature struct {
+   Name string `xml:",attr"` // microsoft.com
 }
 
 type InnerChallenge struct {
-   La        *La
-   Signature Signature
-   XmlNs     string `xml:"xmlns,attr"`
+   La        *La       // microsoft.com
+   Signature Signature // microsoft.com
+   XmlNs     string    `xml:"xmlns,attr"` // microsoft.com
 }
 
 type SignedInfo struct {
-   Reference Reference
-   XmlNs     string `xml:"xmlns,attr"`
+   Reference Reference // microsoft.com
+   XmlNs     string    `xml:"xmlns,attr"` // microsoft.com
 }
 
 type Reference struct {
-   DigestValue Bytes
-   Uri         string `xml:"URI,attr"`
-}
-
-type KeyInfo struct {
-   EncryptedKey EncryptedKey
-   XmlNs        string `xml:"xmlns,attr"`
-}
-
-type WrmHeaderData struct {
-   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES"`
-   Kid              Bytes             `xml:"KID"`
-   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"`
-}
-
-type ProtectInfo struct {
-   AlgId  string `xml:"ALGID"`
-   KeyLen string `xml:"KEYLEN"`
-}
-
-type EncryptedKeyInfo struct {
-   KeyName string
-   XmlNs   string `xml:"xmlns,attr"`
-}
-
-type EncryptedKey struct {
-   CipherData       CipherData
-   EncryptionMethod Algorithm
-   KeyInfo          EncryptedKeyInfo
-   XmlNs            string `xml:"xmlns,attr"`
-}
-
-type WrmHeader struct {
-   Data WrmHeaderData `xml:"DATA"`
-   // ATTRIBUTE ORDER MATTERS
-   XmlNs   string `xml:"xmlns,attr"`
-   Version string `xml:"version,attr"`
+   DigestValue Bytes  // microsoft.com
+   Uri         string `xml:"URI,attr"` // microsoft.com
 }
 
 type La struct {
-   ClientTime    int
-   ContentHeader ContentHeader
-   EncryptedData EncryptedData
-   LicenseNonce  Bytes
-   Version       string
-   XMLName       xml.Name `xml:"LA"`
+   ClientTime    int // 9c9media.com
+   ContentHeader ContentHeader // microsoft.com
+   EncryptedData EncryptedData // microsoft.com
+   LicenseNonce  Bytes // 9c9media.com
+   Version       string // microsoft.com
+   XMLName       xml.Name `xml:"LA"` // microsoft.com
    // ATTRIBUTE ORDER MATTERS
-   XmlNs string `xml:"xmlns,attr"`
-   Id    string `xml:"Id,attr"`
+   XmlNs string `xml:"xmlns,attr"` // microsoft.com
+   Id    string `xml:"Id,attr"` // microsoft.com
+}
+
+type ContentHeader struct {
+   WrmHeader WrmHeader `xml:"WRMHEADER"` // microsoft.com
+}
+
+type WrmHeader struct {
+   Data WrmHeaderData `xml:"DATA"` // microsoft.com
+   // ATTRIBUTE ORDER MATTERS
+   XmlNs   string `xml:"xmlns,attr"` // microsoft.com
+   Version string `xml:"version,attr"` // microsoft.com
+}
+
+type WrmHeaderData struct {
+   CustomAttributes *CustomAttributes `xml:"CUSTOMATTRIBUTES"` // 9c9media.com
+   Kid              Bytes             `xml:"KID"` // microsoft.com
+   ProtectInfo      ProtectInfo       `xml:"PROTECTINFO"` // microsoft.com
+}
+
+type CustomAttributes struct {
+   ContentId string `xml:"CONTENTID"` // 9c9media.com
+}
+
+type ProtectInfo struct {
+   AlgId  string `xml:"ALGID"` // microsoft.com
+   KeyLen int `xml:"KEYLEN"` // microsoft.com
 }
 
 type EncryptedData struct {
-   CipherData       CipherData
-   EncryptionMethod Algorithm
-   KeyInfo          KeyInfo
+   CipherData       CipherData // microsoft.com
+   EncryptionMethod EncryptionMethod // microsoft.com
+   KeyInfo          EncryptedDataInfo // microsoft.com
    // ATTRIBUTE ORDER MATTERS
-   XmlNs string `xml:"xmlns,attr"`
-   Type  string `xml:"Type,attr"`
+   XmlNs string `xml:"xmlns,attr"` // microsoft.com
+   Type  string `xml:"Type,attr"` // microsoft.com
+}
+
+type EncryptionMethod struct {
+   Algorithm string `xml:"Algorithm,attr"` // microsoft.com
+}
+
+type CipherData struct {
+   CipherValue Bytes // microsoft.com
+}
+
+type EncryptedDataInfo struct {
+   EncryptedKey EncryptedKey // microsoft.com
+   XmlNs        string `xml:"xmlns,attr"` // microsoft.com
+}
+
+type EncryptedKey struct {
+   CipherData       CipherData // microsoft.com
+   EncryptionMethod EncryptionMethod // microsoft.com
+   KeyInfo          EncryptedKeyInfo // microsoft.com
+   XmlNs            string `xml:"xmlns,attr"` // microsoft.com
+}
+
+type EncryptedKeyInfo struct {
+   KeyName string // microsoft.com
+   XmlNs   string `xml:"xmlns,attr"` // microsoft.com
 }
