@@ -39,11 +39,10 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    laDigest := sha256.Sum256(laData)
 
    signedInfo := xml.SignedInfo{
-      Reference: xml.Reference{
-         DigestValue: laDigest[:],
-         Uri:         "#SignedData",
+      Reference: xml.Reference{ // microsoft.com
+         DigestValue: laDigest[:],   // microsoft.com
+         Uri:         "#SignedData", // microsoft.com
       },
-      XmlNs: "http://www.w3.org/2000/09/xmldsig#",
    }
 
    signedData, err := xml.Marshal(signedInfo)
@@ -62,34 +61,34 @@ func (c *Chain) LicenseRequestBytes(signingKey *ecdsa.PrivateKey, kid []byte, co
    sigS.FillBytes(sign[32:])
 
    envelope := xml.Envelope{
-      Body: xml.Body{
-         AcquireLicense: &xml.AcquireLicense{
-            Challenge: xml.OuterChallenge{
-               Challenge: xml.InnerChallenge{
-                  La: laRequest,
-                  Signature: xml.Signature{
-                     SignatureValue: sign[:],
-                     SignedInfo:     signedInfo,
+      Body: xml.Body{ // microsoft.com
+         AcquireLicense: &xml.AcquireLicense{ // microsoft.com
+            Challenge: xml.OuterChallenge{ // microsoft.com
+               Challenge: xml.InnerChallenge{ // microsoft.com
+                  La: laRequest, // microsoft.com
+                  Signature: xml.Signature{ // microsoft.com
+                     SignatureValue: sign[:],    // microsoft.com
+                     SignedInfo:     signedInfo, // microsoft.com
                   },
-                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages",
+                  XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols/messages", // microsoft.com
                },
             },
-            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols",
+            XmlNs: "http://schemas.microsoft.com/DRM/2007/03/protocols", // microsoft.com
          },
       },
-      Soap: "http://schemas.xmlsoap.org/soap/envelope/",
+      Soap: "http://schemas.xmlsoap.org/soap/envelope/", // microsoft.com
    }
    return xml.Marshal(envelope)
 }
 
 func (c *Chain) cipherData(key *xmlKey) ([]byte, error) {
    value := xml.Data{
-      CertificateChains: xml.CertificateChains{
-         CertificateChain: c.Bytes(),
+      CertificateChains: xml.CertificateChains{ // microsoft.com
+         CertificateChain: c.Bytes(), // microsoft.com
       },
-      Features: xml.Features{
-         Feature: xml.Feature{
-            Name: "AESCBC", // SCALABLE
+      Features: xml.Features{ // microsoft.com
+         Feature: xml.Feature{ // microsoft.com
+            Name: "AESCBC", // microsoft.com (SCALABLE)
          },
       },
    }

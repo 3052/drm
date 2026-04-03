@@ -24,55 +24,56 @@ func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*
    }
 
    headerData := xml.WrmHeaderData{
-      Kid: kid,
-      ProtectInfo: xml.ProtectInfo{
-         AlgId:  "AESCTR",
-         KeyLen: 16,
+      Kid: kid, // microsoft.com
+      ProtectInfo: xml.ProtectInfo{ //microsoft.com
+         AlgId:  "AESCTR", // microsoft.com
+         KeyLen: 16,       // microsoft.com
       },
    }
    if contentId != "" {
-      headerData.CustomAttributes = &xml.CustomAttributes{
-         ContentId: contentId,
+      headerData.CustomAttributes = &xml.CustomAttributes{ // 9c9media.com
+         ContentId: contentId, // 9c9media.com
       }
    }
+
    return &xml.La{
-      ContentHeader: xml.ContentHeader{
-         WrmHeader: xml.WrmHeader{
-            Data:    headerData,
-            Version: "4.0.0.0",
-            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader",
+      ContentHeader: xml.ContentHeader{ // microsoft.com
+         WrmHeader: xml.WrmHeader{ // microsoft.com
+            Data:    headerData,                                                 // microsoft.com
+            Version: "4.0.0.0",                                                  // microsoft.com
+            XmlNs:   "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader", // microsoft.com
          },
       },
-      EncryptedData: xml.EncryptedData{
-         CipherData: xml.CipherData{
-            CipherValue: cipherData,
+      EncryptedData: xml.EncryptedData{ // microsoft.com
+         CipherData: xml.CipherData{ // microsoft.com
+            CipherValue: cipherData, // microsoft.com
          },
-         EncryptionMethod: xml.EncryptionMethod{
-            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+         EncryptionMethod: xml.EncryptionMethod{ // microsoft.com
+            Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc", // microsoft.com
          },
-         KeyInfo: xml.EncryptedDataInfo{
-            EncryptedKey: xml.EncryptedKey{
-               CipherData: xml.CipherData{
-                  CipherValue: cipherValue,
+         KeyInfo: xml.EncryptedDataInfo{ // microsoft.com
+            EncryptedKey: xml.EncryptedKey{ // microsoft.com
+               CipherData: xml.CipherData{ // microsoft.com
+                  CipherValue: cipherValue, // microsoft.com
                },
-               EncryptionMethod: xml.EncryptionMethod{
-                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256",
+               EncryptionMethod: xml.EncryptionMethod{ // microsoft.com
+                  Algorithm: "http://schemas.microsoft.com/DRM/2007/03/protocols#ecc256", // microsoft.com
                },
-               KeyInfo: xml.EncryptedKeyInfo{
-                  KeyName: "WMRMServer",
-                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#",
+               KeyInfo: xml.EncryptedKeyInfo{ // microsoft.com
+                  KeyName: "WMRMServer",                         // microsoft.com
+                  XmlNs:   "http://www.w3.org/2000/09/xmldsig#", // microsoft.com
                },
-               XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+               XmlNs: "http://www.w3.org/2001/04/xmlenc#", // microsoft.com
             },
-            XmlNs: "http://www.w3.org/2000/09/xmldsig#",
+            XmlNs: "http://www.w3.org/2000/09/xmldsig#", // microsoft.com
          },
-         Type:  "http://www.w3.org/2001/04/xmlenc#Element",
-         XmlNs: "http://www.w3.org/2001/04/xmlenc#",
+         Type:  "http://www.w3.org/2001/04/xmlenc#Element", // microsoft.com
+         XmlNs: "http://www.w3.org/2001/04/xmlenc#",        // microsoft.com
       },
-      Id:           "SignedData",
-      LicenseNonce: make([]byte, 16),
-      Version:      "1",
-      XmlNs:        "http://schemas.microsoft.com/DRM/2007/03/protocols",
+      Id:           "SignedData",                                         // microsoft.com
+      LicenseNonce: make([]byte, 16),                                     // 9c9media.com
+      Version:      "1",                                                  // microsoft.com
+      XmlNs:        "http://schemas.microsoft.com/DRM/2007/03/protocols", // microsoft.com
    }, nil
 }
 
