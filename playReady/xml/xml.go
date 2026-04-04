@@ -1,4 +1,4 @@
-// xml/models.go
+// xml/xml.go
 package xml
 
 import (
