@@ -1,17 +1,17 @@
-package xml
+package playReady
 
 import (
    "encoding/hex"
    "testing"
 )
 
-func TestParsePlayReadyPRO(t *testing.T) {
+func TestParsePro(t *testing.T) {
    data, err := hex.DecodeString(hexStr)
    if err != nil {
       t.Fatalf("Failed to decode hex: %v", err)
    }
 
-   wrmHeader, err := ParsePlayReadyPRO(data)
+   wrmHeader, err := ParsePro(data)
    if err != nil {
       t.Fatalf("Failed to parse PRO: %v", err)
    }

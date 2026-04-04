@@ -1,4 +1,3 @@
-// chain.go
 package playReady
 
 import (

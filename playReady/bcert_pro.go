@@ -1,9 +1,13 @@
-// models_cert.go
 package playReady
 
 import (
+   "encoding/binary"
    "encoding/hex"
+   "errors"
    "strings"
+   "unicode/utf16"
+
+   "41.neocities.org/diana/playReady/xml"
 )
 
 type BcertObject uint16
@@ -166,4 +170,46 @@ type ChainHeader struct {
 type Chain struct {
    Header       ChainHeader
    Certificates []Certificate
+}
+
+func ParsePro(data []byte) (*xml.WrmHeader, error) {
+   if len(data) < 10 {
+      return nil, errors.New("data too short for PlayReady Object")
+   }
+   proLength := binary.LittleEndian.Uint32(data[0:4])
+   if proLength > uint32(len(data)) {
+      return nil, errors.New("PRO length exceeds data size")
+   }
+   recordCount := binary.LittleEndian.Uint16(data[4:6])
+   var offset uint16 = 6
+   for range recordCount {
+      if int(offset+4) > len(data) {
+         break
+      }
+      recordType := binary.LittleEndian.Uint16(data[offset : offset+2])
+      recordLength := binary.LittleEndian.Uint16(data[offset+2 : offset+4])
+      offset += 4
+      if int(offset+recordLength) > len(data) {
+         return nil, errors.New("record length exceeds data size")
+      }
+      // Type 1 is the Rights Management (RM) Header which contains the XML
+      if recordType == 1 {
+         xmlData := data[offset : offset+recordLength]
+         if len(xmlData)%2 != 0 {
+            return nil, errors.New("invalid UTF-16LE data length")
+         }
+         u16s := make([]uint16, len(xmlData)/2)
+         for j := range u16s {
+            u16s[j] = binary.LittleEndian.Uint16(xmlData[j*2 : j*2+2])
+         }
+         utf8Data := []byte(string(utf16.Decode(u16s)))
+         var header xml.WrmHeader
+         if err := xml.Unmarshal(utf8Data, &header); err != nil {
+            return nil, err
+         }
+         return &header, nil
+      }
+      offset += recordLength
+   }
+   return nil, errors.New("WRMHEADER record not found")
 }

@@ -1,4 +1,3 @@
-// crypto.go
 package playReady
 
 import (

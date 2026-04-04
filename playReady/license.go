@@ -1,4 +1,3 @@
-// license.go
 package playReady
 
 import (
