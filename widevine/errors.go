@@ -7,11 +7,6 @@ import (
    "strings"
 )
 
-// LicenseError reflects the structure of the Widevine LicenseError protobuf.
-type LicenseError struct {
-   ErrorCode *protobuf.Field
-}
-
 // Error implements the standard Go error interface.
 func (le *LicenseError) Error() string {
    if le.ErrorCode == nil {
@@ -21,6 +16,11 @@ func (le *LicenseError) Error() string {
    sb.WriteString("widevine license error: code ")
    sb.WriteString(strconv.FormatUint(le.ErrorCode.Numeric, 10))
    return sb.String()
+}
+
+// LicenseError reflects the structure of the Widevine LicenseError protobuf.
+type LicenseError struct {
+   ErrorCode *protobuf.Field
 }
 
 // decodeErrorFromMessage constructs a LicenseError struct from a pre-parsed protobuf message.
