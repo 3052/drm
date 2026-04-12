@@ -8,4 +8,4 @@ require (
 	github.com/emmansun/gmsm v0.41.1
 )
 
-require golang.org/x/sys v0.42.0 // indirect
+require golang.org/x/sys v0.43.0 // indirect

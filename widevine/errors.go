@@ -22,10 +22,7 @@ type LicenseError struct {
 // decodeErrorFromMessage constructs a LicenseError struct from a pre-parsed
 // protobuf message
 func decodeErrorFromMessage(message protobuf.Message) error {
-   errorCode, ok := message.Field(1)
-   if !ok {
-      return &LicenseError{}
-   }
+   errorCode, _ := message.Field(1)
    return &LicenseError{
       ErrorCode: errorCode,
    }
