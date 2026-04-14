@@ -1,16 +1,45 @@
 package playReady
 
 import (
+   "41.neocities.org/diana/playReady/xml"
    "crypto/aes"
    "crypto/ecdh"
    "crypto/ecdsa"
    "crypto/elliptic"
    "encoding/hex"
-
-   "41.neocities.org/diana/playReady/xml"
    "filippo.io/nistec"
    "github.com/emmansun/gmsm/cipher"
 )
+
+type xmlKey struct {
+   PublicKey *ecdsa.PublicKey
+   X         [32]byte
+}
+
+func (x *xmlKey) initialize() error {
+   privBytes := [32]byte{1}
+
+   privECDH, err := ecdh.P256().NewPrivateKey(privBytes[:])
+   if err != nil {
+      return err
+   }
+   pubBytes := privECDH.PublicKey().Bytes()
+   x.PublicKey, err = ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes)
+   if err != nil {
+      return err
+   }
+
+   copy(x.X[:], pubBytes[1:33])
+   return nil
+}
+
+func (x *xmlKey) aesIv() []byte {
+   return x.X[:16]
+}
+
+func (x *xmlKey) aesKey() []byte {
+   return x.X[16:]
+}
 
 func newLa(pubKey *ecdsa.PublicKey, cipherData, kid []byte, contentId string) (*xml.La, error) {
    genKey, err := elGamalKeyGeneration()
@@ -102,37 +131,8 @@ func publicKeyBytes(key *ecdsa.PrivateKey) ([]byte, error) {
 }
 
 const wmrmPublicKey = "C8B6AF16EE941AADAA5389B4AF2C10E356BE42AF175EF3FACE93254E7B0B3D9B982B27B5CB2341326E56AA857DBFD5C634CE2CF9EA74FCA8F2AF5957EFEEA562"
+
 const magicConstantZero = "7ee9ed4af773224f00b8ea7efb027cbb"
-
-type xmlKey struct {
-   PublicKey *ecdsa.PublicKey
-   X         [32]byte
-}
-
-func (x *xmlKey) initialize() error {
-   privBytes := [32]byte{1}
-
-   privECDH, err := ecdh.P256().NewPrivateKey(privBytes[:])
-   if err != nil {
-      return err
-   }
-   pubBytes := privECDH.PublicKey().Bytes()
-   x.PublicKey, err = ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pubBytes)
-   if err != nil {
-      return err
-   }
-
-   copy(x.X[:], pubBytes[1:33])
-   return nil
-}
-
-func (x *xmlKey) aesIv() []byte {
-   return x.X[:16]
-}
-
-func (x *xmlKey) aesKey() []byte {
-   return x.X[16:]
-}
 
 func elGamalDecrypt(ciphertext []byte, privKey *ecdsa.PrivateKey) ([]byte, error) {
    c1Bytes := [65]byte{4}
