@@ -10,6 +10,16 @@ import (
    "41.neocities.org/diana/playReady/xml"
 )
 
+const (
+   CertHeaderTag = 0x43455254 // "CERT"
+   CertVersion   = 0x00000001
+)
+
+const (
+   ChainHeaderTag = 0x43484149 // "CHAI"
+   ChainVersion   = 0x00000001
+)
+
 type BcertObject uint16
 
 // Object Types
@@ -33,15 +43,7 @@ const (
    BcertObjectSecurityVersion2 BcertObject = 0x0011
 )
 
-const (
-   CertHeaderTag = 0x43455254 // "CERT"
-   CertVersion   = 0x00000001
-)
-
-const (
-   ChainHeaderTag = 0x43484149 // "CHAI"
-   ChainVersion   = 0x00000001
-)
+///
 
 type ObjectHeader struct {
    Flags    uint16
