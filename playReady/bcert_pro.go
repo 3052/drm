@@ -43,13 +43,13 @@ const (
    BcertObjectSecurityVersion2 BcertObject = 0x0011
 )
 
-///
-
 type ObjectHeader struct {
    Flags    uint16
    Type     uint16
    CbLength uint32
 }
+
+///
 
 type CertHeader struct {
    HeaderTag           uint32 // = CertHeaderTag
