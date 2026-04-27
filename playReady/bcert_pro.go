@@ -43,6 +43,13 @@ const (
    BcertObjectSecurityVersion2 BcertObject = 0x0011
 )
 
+type CertHeader struct {
+   HeaderTag           uint32 // = CertHeaderTag
+   Version             uint32 // = CertVersion
+   CbCertificate       uint32
+   CbCertificateSigned uint32
+}
+
 type ObjectHeader struct {
    Flags    uint16
    Type     uint16
@@ -50,13 +57,6 @@ type ObjectHeader struct {
 }
 
 ///
-
-type CertHeader struct {
-   HeaderTag           uint32 // = CertHeaderTag
-   Version             uint32 // = CertVersion
-   CbCertificate       uint32
-   CbCertificateSigned uint32
-}
 
 type CertId struct {
    Rgb [16]byte
