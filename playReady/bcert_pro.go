@@ -50,14 +50,6 @@ type CertHeader struct {
    CbCertificateSigned uint32
 }
 
-type ObjectHeader struct {
-   Flags    uint16
-   Type     uint16
-   CbLength uint32
-}
-
-///
-
 type CertId struct {
    Rgb [16]byte
 }
@@ -65,6 +57,14 @@ type CertId struct {
 func (c CertId) String() string {
    return hex.EncodeToString(c.Rgb[:])
 }
+
+type ObjectHeader struct {
+   Flags    uint16
+   Type     uint16
+   CbLength uint32
+}
+
+///
 
 type ClientId struct {
    Rgb [16]byte
