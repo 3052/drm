@@ -20,6 +20,17 @@ const (
    ChainVersion   = 0x00000001
 )
 
+type BasicInfo struct {
+   Header         ObjectHeader
+   CertificateID  CertId
+   SecurityLevel  uint32
+   Flags          uint32
+   Type           uint32
+   DigestValue    [32]byte
+   ExpirationDate uint32
+   ClientID       ClientId
+}
+
 type BcertObject uint16
 
 // Object Types
@@ -73,17 +84,6 @@ type ObjectHeader struct {
 }
 
 ///
-
-type BasicInfo struct {
-   Header         ObjectHeader
-   CertificateID  CertId
-   SecurityLevel  uint32
-   Flags          uint32
-   Type           uint32
-   DigestValue    [32]byte
-   ExpirationDate uint32
-   ClientID       ClientId
-}
 
 type DeviceInfo struct {
    Header        ObjectHeader
