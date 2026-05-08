@@ -77,6 +77,13 @@ func (c ClientId) String() string {
    return hex.EncodeToString(c.Rgb[:])
 }
 
+type DeviceInfo struct {
+   Header        ObjectHeader
+   CbMaxLicense  uint32
+   CbMaxHeader   uint32
+   MaxChainDepth uint32
+}
+
 type ObjectHeader struct {
    Flags    uint16
    Type     uint16
@@ -84,13 +91,6 @@ type ObjectHeader struct {
 }
 
 ///
-
-type DeviceInfo struct {
-   Header        ObjectHeader
-   CbMaxLicense  uint32
-   CbMaxHeader   uint32
-   MaxChainDepth uint32
-}
 
 type FeatureInfo struct {
    Header            ObjectHeader
