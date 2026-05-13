@@ -111,6 +111,11 @@ func (c CertId) String() string {
    return hex.EncodeToString(c.Rgb[:])
 }
 
+type Chain struct {
+   Header       ChainHeader
+   Certificates []Certificate
+}
+
 type ClientId struct {
    Rgb [16]byte
 }
@@ -209,9 +214,4 @@ type ChainHeader struct {
    CbChain   uint32
    Flags     uint32
    Certs     uint32
-}
-
-type Chain struct {
-   Header       ChainHeader
-   Certificates []Certificate
 }
